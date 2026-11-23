@@ -169,3 +169,17 @@ Turned down: asking for the element under each pane's middle, slower and unprove
 Cost: a tap moves the pointer, and a config with its own Agent Key line has to add pane:chat by hand. Mine did.
 
 Still open: the 3 second wait for a slow session to show has not run out yet.
+
+## 13. The first hours in public
+
+Decisions: D-041, D-042
+
+The repo had been public for less than an hour when its first pull request went red. One test of 276 failed with "permission denied", in a folder the test had made a moment before. The same failure had shown up twice on my Mac that day, about once in fourteen full runs. Claude had filed it as an issue with the cause unknown.
+
+Claude suspected the file mask. It is one setting the whole process shares, and it decides the permissions of new files and folders. Claude tested thirteen system calls, found nothing, and reported that our code never touched the mask. That was wrong. A second Claude session, working on the stick in the same folder, had already found it: the socket code set the mask for an instant while it bound the socket. A folder another thread made in that instant came out unwritable. Claude's search had read the folder with that session's fix already sitting in it, so the call looked absent. The fix is small: bind, then give the socket its mode with chmod. A probe showed the difference: 16,558 of 40,000 folders unwritable before, none after.
+
+The same hour I had Claude make GitHub hide my email. GitHub's own merge of a pull request had put my personal address on the merge commit, and the privacy switch stops that. GitHub switched on its push block along with it, and the block refused pushes from every other repo of mine. I asked whether there was a reason for any of this. For the block there was none, so it went off again.
+
+Turning point: the red run on GitHub's own machine. Until then the failure could have been my Mac or Claude's shell.
+
+Cost: my GitHub profile shows no email now. Nothing on GitHub's side keeps the private history out of the public repo. A guard in my working folder does that.
