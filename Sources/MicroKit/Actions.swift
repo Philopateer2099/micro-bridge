@@ -61,6 +61,8 @@ public final class ActionRunner {
             scroll(up ? Self.scrollStep : -Self.scrollStep)
         case let .pane(left):
             movePointer(toPaneOn: left)
+        case .pointerToChat:
+            pointerToChat(after: session)
         case let .key(combo, phase, _):
             // A key that is already held must always come back up.
             guard mayType(checkApp: phase != .up) else { return false }
@@ -220,6 +222,65 @@ public final class ActionRunner {
         CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: spot, mouseButton: .left)?
             .post(tap: .cghidEventTap)
         log("pane:\(way): pointer to the pane at x \(Int(pane.minX))…\(Int(pane.maxX)) (\(panes.count) in the window, \(took) ms)")
+    }
+
+    // MARK: The pointer onto the chat
+
+    /// The app whose chat `pane:chat` finds, and the name of its message box.
+    private static let claudeApp = "com.anthropic.claudefordesktop"
+    private static let messageBox = "Prompt"
+    /// How long `pane:chat` waits for the session a `jump` shows, and how often it looks.
+    private static let chatWait = 3.0
+    private static let chatLook = 0.15
+    /// A pointer that moved farther than this since the press was moved by the user, and stays.
+    private static let ownMove = 8.0
+    /// Counts `pane:chat` presses: one still waiting gives up when a newer one comes.
+    private var chatTurn = 0
+
+    /// Puts the pointer on the chat of the Claude app's window, so the stick scrolls the chat.
+    /// With a session (an Agent Key after `jump`), first waits for the app to show it. A session
+    /// in a terminal has no chat to go to.
+    private func pointerToChat(after session: Session?) {
+        guard mayType(checkApp: false), let pointer = CGEvent(source: nil)?.location else { return }
+        chatTurn += 1
+        if session != nil, session?.host == nil {
+            log("pane:chat: the session is not in the Claude app; the pointer stays")
+            return
+        }
+        lookForChat(turn: chatTurn, wanted: session?.host, pointer: pointer, until: Date().addingTimeInterval(Self.chatWait))
+    }
+
+    private func lookForChat(turn: Int, wanted: SessionHost?, pointer: CGPoint, until deadline: Date) {
+        guard turn == chatTurn else { return }
+        let front = Self.frontApp == Self.claudeApp
+        guard front, wanted.map({ ScreenButtons.shownSessions(bundleID: Self.claudeApp).contains($0) }) ?? true else {
+            guard wanted != nil, Date() < deadline else {
+                log(wanted == nil ? "pane:chat: the Claude app is not in front; the pointer stays"
+                    : "pane:chat: the session did not show within \(Int(Self.chatWait)) s; the pointer stays")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.chatLook) { [weak self] in
+                MainActor.assumeIsolated { self?.lookForChat(turn: turn, wanted: wanted, pointer: pointer, until: deadline) }
+            }
+            return
+        }
+        let started = Date()
+        let layout = ScreenButtons.layout(bundleID: Self.claudeApp, box: Self.messageBox)
+        let took = Int(Date().timeIntervalSince(started) * 1000)
+        guard let box = layout.box, let chat = Panes.chat(in: layout.panes, above: box) else {
+            log("pane:chat: found no chat above the message box (\(layout.panes.count) panes, \(took) ms); the pointer stays")
+            return
+        }
+        guard let now = CGEvent(source: nil)?.location else { return }
+        if hypot(now.x - pointer.x, now.y - pointer.y) > Self.ownMove {
+            log("pane:chat: the pointer moved after the press; it stays where it was put")
+        } else if chat.contains(now) {
+            log("pane:chat: the pointer is on the chat already")
+        } else {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: Panes.spot(in: chat), mouseButton: .left)?
+                .post(tap: .cghidEventTap)
+            log("pane:chat: pointer onto the chat at x \(Int(chat.minX))…\(Int(chat.maxX)) (\(took) ms)")
+        }
     }
 
     /// Locks the Mac with the shortcut a person would press, ⌃⌘Q, whichever app is in front.

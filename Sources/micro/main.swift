@@ -24,8 +24,10 @@ usage: micro <command> [--trace]
   tree <box> [app] [--watch secs] [--attributes]
                                  print everything inside a box (its label, id or class), again on each
                                  change; --attributes lists every accessibility attribute instead
-  panes [app]     list the parts of an app's front window that scroll on their own, and where the
-                  pad's pane:left and pane:right would move the pointer from here (moves nothing)
+  panes [app] [--names]
+                  list the parts of an app's front window that scroll on their own, which is the
+                  chat, and where pane:left and pane:right would move the pointer (moves nothing);
+                  --names adds each pane's role and classes
   record <file>                  say whether a Claude Code session record ends with a turn stopped by hand
   paint           light the six Agent Keys in six different states, left to right
   set <slot> <status>
@@ -282,16 +284,24 @@ case "status":
     }
 
 case "panes":
-    let bundle = args.count > 1 ? args[1] : "com.anthropic.claudefordesktop"
+    let bundle = args.dropFirst().first { !$0.hasPrefix("--") } ?? "com.anthropic.claudefordesktop"
     let started = Date()
-    let panes = ScreenButtons.panes(bundleID: bundle)
+    let layout = ScreenButtons.layout(bundleID: bundle, box: "Prompt")
+    let panes = layout.panes
     let took = Int(Date().timeIntervalSince(started) * 1000)
     guard !panes.isEmpty else { fail("no panes found in \(bundle)'s front window (\(took) ms)") }
     func name(_ pane: CGRect) -> String {
         "x \(Int(pane.minX))…\(Int(pane.maxX)), y \(Int(pane.minY))…\(Int(pane.maxY))"
     }
-    print("\(panes.count) panes in \(took) ms, left to right:")
-    for pane in panes.sorted(by: { $0.midX < $1.midX }) { print("  " + name(pane)) }
+    let merged = Panes.merged(panes)
+    let copies = panes.count - merged.count
+    print("\(merged.count) panes in \(took) ms, left to right" + (copies > 0 ? " (\(copies) hidden copies left out):" : ":"))
+    let chat = layout.box.flatMap { Panes.chat(in: panes, above: $0) }
+    for pane in merged.sorted(by: { $0.midX < $1.midX }) { print("  " + name(pane) + (pane == chat ? "  the chat" : "")) }
+    if layout.box == nil { print("no message box named Prompt: pane:chat would find no chat") }
+    if args.contains("--names") {
+        for (pane, what) in ScreenButtons.paneNames(bundleID: bundle) { print("  \(name(pane)): \(what)") }
+    }
     let pointer = CGEvent(source: nil)?.location ?? .zero
     print("the pointer is at \(Int(pointer.x)), \(Int(pointer.y))")
     for left in [true, false] {

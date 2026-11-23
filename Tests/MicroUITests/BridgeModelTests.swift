@@ -90,12 +90,12 @@ import Testing
 
         model.setTrigger("hold", of: "agentKeys", to: nil)
         #expect(model.config.actions(for: "AG", "hold").isEmpty)
-        #expect(model.config.actions(for: "AG", "press") == actions("ack", "jump"))
+        #expect(model.config.actions(for: "AG", "press") == actions("ack", "jump", "pane:chat"))
         #expect(!model.sectionIsDefault("agentKeys"))
 
         model.setTrigger("empty", of: "agentKeys", to: .string("open:claude://code/new"))
         #expect(model.config.actions(for: "AG", "empty") == actions("open:claude://code/new"))
-        #expect(model.config.actions(for: "AG", "press") == actions("ack", "jump"))
+        #expect(model.config.actions(for: "AG", "press") == actions("ack", "jump", "pane:chat"))
 
         model.set(nil, at: ["agentKeys"])
         #expect(model.config.actions(for: "AG", "hold") == actions("forget"))
@@ -289,7 +289,7 @@ import Testing
         #expect(model.trigger("doubleTap", of: "agentKeys") == nil)
         model.setTrigger("doubleTap", of: "agentKeys", to: .string("pin"))
         #expect(model.config.actions(for: "AG", "doubleTap") == [.pin])
-        #expect(model.config.actions(for: "AG", "press") == actions("ack", "jump"))
+        #expect(model.config.actions(for: "AG", "press") == actions("ack", "jump", "pane:chat"))
         #expect(model.config.actions(for: "AG", "hold") == actions("forget"))
         model.setTrigger("doubleTap", of: "agentKeys", to: nil)
         #expect(model.config == Config.builtIn)

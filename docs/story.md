@@ -151,3 +151,21 @@ Then the repo itself. The private history has my email on every commit, so the p
 Turning point: the clean copy passed the scan for private data, and git's hash said its files were the same as main's. After that the push was a small step.
 
 Cost: an old address now leads to the public repo, so the private history must never be pushed there. The first visitors have to build it themselves. A test failed at random twice that day and Claude could not find why in ten minutes. It is filed as an issue, not hidden.
+
+## 12. The stick finds the chat
+
+Decisions: D-039, D-040
+
+The stick scrolls whatever is under the pointer. With a web page open beside the chat, I scrolled the page, pushed left to get back to the chat, and the pointer did not move. I was stuck in the page. And every time I switched sessions with an Agent Key, I had to push right before the stick would scroll the chat.
+
+Claude read the log and asked the window what it holds. The side pane reported its web page three times: two hidden browser tabs had kept the sizes the pane had before I made it narrower. A push left went to a wider copy, and its middle was still inside the page. Every push landed on the same spot.
+
+Turning point: one rule fixed the first layout and missed the next. Copies with the same edges now count as one, but after I resized again a copy shared no edge. So a move must leave the pane the pointer is in, or it is no move.
+
+For switching, a tap now puts the pointer on the chat once the session shows. The chat is the pane right above the message box. Finding the box took a second try, because it sits inside a small element that scrolls, and the walk stopped at those.
+
+Turned down: asking for the element under each pane's middle, slower and unproven in this app. Making the jump itself move the pointer, which could not be turned off.
+
+Cost: a tap moves the pointer, and a config with its own Agent Key line has to add pane:chat by hand. Mine did.
+
+Still open: the 3 second wait for a slow session to show has not run out yet.

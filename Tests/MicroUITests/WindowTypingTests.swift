@@ -59,7 +59,7 @@ import Testing
         #expect(model.actions(in: list).isEmpty)
         #expect(model.trigger("doubleTap", of: "agentKeys") == nil)
         // The other triggers of the Agent Keys are as they were.
-        #expect(model.does("AG", "press").claude == [.ack, .jump])
+        #expect(model.does("AG", "press").claude == [.ack, .jump, .pointerToChat])
         #expect(model.does("AG", "hold").claude == [.forget])
     }
 

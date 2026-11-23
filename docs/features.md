@@ -13,7 +13,7 @@ can attach any action to it (see `configuration.md`).
 |---|---|---|
 | Light per chat: white idle, blue working, green done and unread, amber needs input, red error, off unassigned | ✅ | per Claude Code session; colors configurable |
 | The selected chat's key pulses | ✅ | `lighting.pulseSelected` (on by default) pulses the key of the session the Claude app's window shows; a session in a terminal does not pulse |
-| Tap: switch to that chat. Double tap within 350 ms: also bring the app forward | ✅ | tap clears green or red and shows that session (`ack`, `jump`); a pad key that presses a button in the session on screen clears it too; looking at it does not: its Code session in the Claude app, raising the app. Terminal and Ghostty sessions only get their app raised. Sessions started in an Orca terminal take no key (the owner's choice, 2026-11-13) |
+| Tap: switch to that chat. Double tap within 350 ms: also bring the app forward | ✅ | tap clears green or red and shows that session (`ack`, `jump`); a pad key that presses a button in the session on screen clears it too; looking at it does not: its Code session in the Claude app, raising the app, then puts the pointer on its chat so the stick scrolls it (`pane:chat`). Terminal and Ghostty sessions only get their app raised. Sessions started in an Orca terminal take no key (the owner's choice, 2026-11-13) |
 | Tap an empty key: start a new chat on that key | ◻ off by default (2026-11-18) | a dark key does nothing; a key bound to `cmd:NEW` starts sessions. `agentKeys.empty` can turn it back on |
 | Hold a key: clear it | ✅ | ours, not ChatGPT's: holding an Agent Key for half a second drops its session from the pad (`forget`); a tap still opens it |
 | A chat keeps its key while it is not running | ✅ | a Claude app session that ended keeps its key until another session takes it (`rememberHours`: "always") and a press opens it again; keys survive a restart of the bridge; a session in a terminal frees its key when it ends |
@@ -50,7 +50,8 @@ Up and down can scroll instead (not ChatGPT's): `scroll:up` and `scroll:down` sc
 the pointer for as long as the stick is pushed, faster the farther. The Claude app only scrolls for
 a wheel aimed at the window under the pointer, so the pointer has to be over the chat.
 Left and right can pick what scrolls: `pane:left` and `pane:right` move the pointer to the next
-pane that way (the chat, a web page in the side pane, the sidebar).
+pane that way (the chat, a web page in the side pane, the sidebar). A tap on an Agent Key puts the
+pointer on the chat (`pane:chat`), so the stick scrolls the session it just showed.
 
 ## Dial
 

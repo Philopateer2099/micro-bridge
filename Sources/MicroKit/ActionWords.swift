@@ -37,6 +37,7 @@ extension Action {
         case .lock: return "Turn the lights off and lock the Mac"
         case let .scroll(up): return up ? "Scroll up" : "Scroll down"
         case let .pane(left): return "Move the pointer to the pane on the \(left ? "left" : "right")"
+        case .pointerToChat: return "Move the pointer onto the chat, once the session shows"
         case let .key(_, phase, spelling):
             let keys = KeyCombo.symbols(spelling)
             switch phase {
