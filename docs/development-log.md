@@ -862,6 +862,44 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Orca, read and talked through before any code (2026-11-23 18:50 UTC), nothing built
+
+The owner opened the talk on Orca's layer (the issue "Orca on a layer of its own"). The
+answers are D-043 to D-049. What was read on the way, on Orca 1.4.271 (`com.stablyai.orca`):
+
+- `orca agent list --json` lists each agent with a kind (`chat` or `terminal`), a state
+  (`working`, `blocked`, `waiting`, `done`), a title, a pane key and an Orca session ID.
+  `orca agent show <id>` says where it is open.
+- A chat is not a terminal. It has the kind `chat` and a pane key that starts with
+  `structured-agent-session-`, and `orca terminal list` does not show it. `orca terminal switch`
+  and the plugin methods `terminal.focus` and `terminal.send` take terminals only.
+  `orca worktree activate` brings a workspace forward. No command says which tab is on screen.
+- The plugin typings (`orca plugin types <dir>` writes them) give a plugin the workspace on
+  screen (`workspace.readContext`, and the event `workspace.changed`), the agents with their
+  state (`agents.list`, and the event `agent.status.changed`), a private store, and
+  `agent.resume`, which reopens a session in a new terminal. Orca's hooks never see a prompt a
+  person types.
+- The chat's controls have names: the message box is "Ask anything, @ to mention files, / for
+  commands", and there are "Send", "Start dictation" and "Permissions". A tab is a button named
+  by its title, next to "Close tab" and that title.
+- Orca's first-run screen has "Yolo mode" switched on: agents act without asking. With it on
+  there is no permission prompt for Approve to press.
+- The bridge has left sessions in Orca's terminals alone since 2026-11-13
+  (`ORCA_TERMINAL_HANDLE`). It knows nothing of chats.
+- The sandbox copy (D-049) is the installed app started with `ORCA_E2E_USER_DATA_DIR`, a `HOME`
+  inside that folder and `ORCA_E2E_HEADLESS=1`. Orca's own command reaches it with
+  `ORCA_USER_DATA_PATH` set to the same folder, and `--remote-debugging-port` lets a script read
+  its window. The owner's Claude settings, `~/.orca`, the `orca` command, the LaunchAgents and
+  the Orca app were identical before and after. It listens on one port on every interface, as
+  the working Orca does.
+- Started a second time with a window, so the owner could sign in to Claude there, the sandbox
+  stopped inside a macOS keychain dialog: its throwaway home has no keychain. It was quit. The
+  owner's keychain list and Claude sign-in were unchanged. The sandbox is for headless use.
+- Not seen yet: the chat's permission prompt, the state `blocked` on a chat, and a closed chat
+  reopened as a chat. Not checked: whether a Claude session in an Orca chat carries
+  `ORCA_TERMINAL_HANDLE`. If it does not, it shows on Claude's layer today.
+- No code and no tests changed (276 tests).
+
 ### Tests that failed now and then (2026-11-23 01:05 UTC), fixed
 
 CI failed on PR 4 in `thePluginAndTheSettingsHookAreNeverBothOn`: permission denied writing a

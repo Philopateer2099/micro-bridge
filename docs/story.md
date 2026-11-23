@@ -183,3 +183,15 @@ The same hour I had Claude make GitHub hide my email. GitHub's own merge of a pu
 Turning point: the red run on GitHub's own machine. Until then the failure could have been my Mac or Claude's shell.
 
 Cost: my GitHub profile shows no email now. Nothing on GitHub's side keeps the private history out of the public repo. A guard in my working folder does that.
+
+## 14. Orca, talked through first
+
+Decisions: D-043 to D-049
+
+I wanted Orca on the pad, but not the way Claude is. In Claude the keys follow my sessions by themselves. In Orca I want to put each agent on a key myself, and I want it to stay there until I take it off. So before any code we talked it through, one question at a time.
+
+A key holds one agent tab. I put it there with a hold on the pad or from a panel in Orca, and only I can free it. If the workspace I am looking at has several agents, the key flashes and I pick in the panel, because Orca cannot say which tab I am looking at. If I close a tab, its key goes dim, and a tap brings the conversation back.
+
+Turning point: Claude first designed the controls for agents in a terminal, because the one agent open in my Orca that day ran in one. I do not use terminals. I use the Claude desktop app and Orca's chat, so the controls in Orca's chat do what they do in the Claude app. I also turned down Claude's advice on layers. I want them isolated: on Orca's layer the controls work in Orca, on Claude's layer in the Claude app, and other apps get the same general actions on both. The settings go in both places, the MicroBridge window and the Orca panel.
+
+Cost: this is a bigger build than one more app in a list, and Claude's layer changes too. Nothing is proven on a real Orca chat yet. The permission prompt is unseen, and reopening a closed chat is untested. To look without touching the Orca I work in, Claude started a second copy in Orca's own test mode with a throwaway home. It runs without a window. It has no Claude sign-in, and with a window it stopped on a keychain dialog, so the real prompt will be checked in my own Orca when I say so.

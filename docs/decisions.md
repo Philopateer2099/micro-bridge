@@ -336,3 +336,59 @@ Why: With privacy on, a pull request merged on GitHub is authored with the norep
 Consequence: The owner's GitHub profile shows no email. Pull requests on the public repo may be merged on GitHub. Nothing on GitHub's side stops the private history from being pushed to the public repo. The pre-push guard in the owner's working folder does that, and a fresh clone of the public repo has no private history to push.
 Rejected: Both off: a merge on GitHub would show the personal address. Both on, with the personal git settings switched to the noreply address: it changes the identity of every personal repo for a risk the folder's guard already covers.
 By: owner
+
+## D-043 (2026-11-23): On Orca's layer an Agent Key holds one agent tab, put there by hand
+
+Decision: On Orca's layer a key holds one agent tab, which for the owner is a chat. Only the owner puts a tab on a key: a hold on an empty key takes the agent in the workspace on screen, or the panel in Orca assigns it. A hold on a taken key frees it. Nothing else frees a key.
+Why: The owner wants to choose what the six keys show in Orca, and keys that never change by themselves. A chat keeps its ID across /clear, so a key can hold the tab.
+Consequence: Orca's layer does not follow sessions the way Claude's layer does. What is on each key is saved and survives a restart of the bridge and of Orca. A key can hold a tab that is closed (D-045).
+Rejected: A key per worktree. Keys that follow the newest or busiest agents, as on Claude's layer.
+By: owner
+
+## D-044 (2026-11-23): With several agents in the workspace on screen, a held key flashes and the panel picks
+
+Decision: When the workspace on screen has one agent, a hold on an empty key takes it. When it has several, the key flashes, the panel in Orca opens, and the owner picks the agent there.
+Why: Orca tells a plugin which workspace is on screen, not which tab inside it (read from the plugin typings of Orca 1.4.271, not tried). A guess could put the wrong agent on a key.
+Consequence: The several-agents case needs the mouse. On 2026-11-23 the owner's Orca had one agent in three workspaces, so it is the rare case.
+Rejected: Stepping through the workspace's agents with the dial: exact and no mouse, about half a day more to build. Taking the agent last sent a message: a guess, and Orca does not report prompts a person types.
+By: owner
+
+## D-045 (2026-11-23): A closed tab's key goes dim, and a tap reopens the conversation
+
+Decision: When the agent tab on a key closes, the key keeps it and goes dim. A tap reopens that conversation in a new tab in the same workspace, and the key holds the new tab. No message is sent.
+Why: The key must not free itself (D-043). A dim key that reopens its conversation is a bookmark, not a dead key.
+Consequence: Not proven for chats: Orca's plugin method that resumes a session is documented as opening a terminal. Check it on a signed-in chat before building on it.
+Rejected: A dim key whose tap does nothing.
+By: owner
+
+## D-046 (2026-11-23): Orca's layer is built for Orca's chat, not for terminal agents
+
+Decision: On Orca's layer the controls do in Orca's chat what they do in the Claude desktop app: Approve presses the chat's allow button, Decline presses deny, the dial steps question cards, the stick scrolls, and the wide key is hold-to-talk.
+Why: The owner works in the Claude desktop app and in Orca's chat, and uses no terminal agents. The first draft of this layer copied the terminal behavior (Return, Esc, slash commands) and was wrong.
+Consequence: A chat is not a terminal: Orca lists it as kind chat with a state and a fixed ID, and Orca's commands that jump to or type into a terminal do not reach it. The jump brings the chat's workspace forward and then picks the tab by its name on screen. The chat's permission prompt has not been seen yet.
+Rejected: Terminal behavior on Orca's layer.
+By: owner
+
+## D-047 (2026-11-23): Layers are isolated: a layer's controls work only in that layer's app
+
+Decision: On Orca's layer Approve, Decline, the dial, the stick and the wide key act only while Orca is in front. On Claude's layer they act only in the Claude app, and do nothing in Orca. A tap on an Agent Key still brings its app to the front. In apps that are neither, the pad's general actions are the same on both layers.
+Why: The owner asked for layer isolation: the layer says which app the pad is for.
+Consequence: This changes Claude's layer: today its controls act on whatever app is in front. With Orca in front on Claude's layer they will do nothing. The stick still scrolls a web page on either layer.
+Rejected: Controls that always act on the app in front, with the layer changing only whose agents the keys show. Claude recommended it as less to remember, and the owner turned it down.
+By: owner
+
+## D-048 (2026-11-23): Orca's control settings live in the MicroBridge window and in the Orca panel
+
+Decision: What each control does in Orca can be changed in the MicroBridge window, where Orca is one more app, and in the panel in Orca. The panel also shows the six keys and assigns agents to them.
+Why: The owner chose both when asked to pick one.
+Consequence: The config file stays the one place the settings are stored, and both screens read and write it through the bridge. Two screens must be kept in step.
+Rejected: The window only, which is less to build. The panel only.
+By: owner
+
+## D-049 (2026-11-23): Orca is tried in a sandbox copy, not in the owner's working Orca
+
+Decision: Orca work is tried against a second copy of Orca, started headless in Orca's own test mode with a throwaway data folder and a throwaway home folder. The owner's working Orca is touched only at a moment the owner picks.
+Why: The owner asked for an instance apart from the one they work in. A plain second copy would share the home folder, where Orca keeps hooks in Claude's settings file.
+Consequence: It starts with ORCA_E2E_USER_DATA_DIR, HOME set to the home folder inside it, and ORCA_E2E_HEADLESS=1; in this mode Orca refuses to start unless the home is the throwaway one. On 2026-11-23 the owner's Claude settings, ~/.orca, the orca command, the LaunchAgents and the Orca app were identical before and after. The sandbox has no Claude sign-in, so it shows no real permission prompt. With a window it stops on a macOS keychain dialog, so it runs headless only. It can still read the real home folder.
+Rejected: A plain second copy of Orca. Signing in to Claude inside the sandbox: it meets the keychain dialog.
+By: claude
