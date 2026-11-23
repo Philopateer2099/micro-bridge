@@ -288,3 +288,19 @@ Why: The owner asked for it on 2026-11-22: the bridge works on their desk and th
 Consequence: First visitors need Xcode or the Command Line Tools to build it. The demo video and the install test on a fresh account are still open on the day of this entry. Show HN and the letter to Work Louder stay where the plan had them, after the download.
 Rejected: Waiting for the notarized zip first: it adds days of waiting on Apple before anyone sees the project.
 By: owner
+
+## D-037 (2026-11-22): The public repo takes the name micro-bridge
+
+Decision: On 2026-11-22 the private repo was renamed micro-bridge-private and stays private, as the archive. A new public repo took the name micro-bridge. It holds one commit, 454e7ee, with the files of main as they stood after pull request 2.
+Why: The README, the plugin and the site already link that address, so no link changed. The owner picked it when asked.
+Consequence: An old clone that still points at the old address now points at the public repo. The working folder on the owner's Mac was pointed at micro-bridge-private before the public repo was made, and no other clone was found on that Mac. The private history must never be pushed to micro-bridge: it carries the owner's email and a session id (D-016). Work for the public repo starts from its main. Issues do not move between repos, so the open ones were written again there.
+Rejected: Calling the public repo MicroBridge and leaving the private name alone: no old address could reach the public repo, but two names that are easy to mix up, and links to change in three files.
+By: owner
+
+## D-038 (2026-11-22): Public commits carry the name on the owner's GitHub profile
+
+Decision: The name on public commits is the one on the owner's GitHub profile, with that account's noreply address (D-017). The owner's Mac has another name in its git settings; that one stays on the private history.
+Why: The owner picked it on 2026-11-22 when asked which of the two to use. The public repo sits under that profile.
+Consequence: A folder that commits to the public repo sets user.name and user.email for itself before its first commit. The Mac-wide git name and email are not used there.
+Rejected: The name in the Mac's git settings.
+By: owner

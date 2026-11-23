@@ -139,3 +139,15 @@ Cost: Going to ChatGPT takes 8 to 10 seconds. MicroBridge shuts ChatGPT out whil
 Turned down: A rebuild that never shuts ChatGPT out, with plain keyboard keys on my layer. About half a day of work, and the stick would probably lose its speed control. I barely use ChatGPT now, so the wait stays.
 
 Still open: Orca on layer 2, with ChatGPT moved to layer 3.
+
+## 11. Going public
+
+Decisions: D-036 to D-038
+
+The bridge worked on my desk and I wanted people to see it. The plan said to wait: first a signed download from Apple, then the posts. I did not want to wait days on a membership check. So LinkedIn and Reddit moved forward, and the posts say to build from source.
+
+Then the repo itself. The private history has my email on every commit, so the public repo starts from one clean commit, as planned. It needed a name. Every link in the README, the plugin and the site already pointed at micro-bridge. So the public repo took that name and the private one became micro-bridge-private. The commit carries the name on my GitHub profile and GitHub's noreply address.
+
+Turning point: the clean copy passed the scan for private data, and git's hash said its files were the same as main's. After that the push was a small step.
+
+Cost: an old address now leads to the public repo, so the private history must never be pushed there. The first visitors have to build it themselves. A test failed at random twice that day and Claude could not find why in ten minutes. It is filed as an issue, not hidden.
