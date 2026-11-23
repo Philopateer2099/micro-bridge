@@ -862,6 +862,32 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The pad took the three-layer profile (2026-11-23 23:36 UTC), nothing built
+
+The owner left the import to Claude. MicroBridge was stopped for it for about 7 minutes,
+because Work Louder Input cannot read the pad while the bridge holds it, and started again
+after.
+
+- Input's profile list has "Import". The file came in as the profile "Three layers", with
+  layers 1, 2 and 3. Layers 2 and 3 show the names "Orca" and "ChatGPT", and each layer shows
+  the pad's own layout ("To edit this layer please use ChatGPT app").
+- A click on a profile's row sets it active at once. Input counts down "Updating device in 3"
+  and writes the pad. It asks nothing first.
+- With "Three layers" active the pad answered `device.status` with `profile_index` 2 and
+  `layer_index` 2. With "One tap" active again it answered `profile_index` 1 and `layer_index`
+  2. So the profile index follows Input's list from 0, and the pad keeps its layer number
+  when the profile changes.
+- Choosing a layer in Input's window does not move the pad: with layer 3 chosen there, the pad
+  still answered layer 2. Only the touch sensor moves it. That a tap takes the pad to layer 3
+  is not seen yet: it needs the owner's finger.
+- `scripts/micro status` read those answers. It opens the pad itself, so it runs only while
+  no daemon does.
+- Input's file window could not be worked in the background. Picking the file took the screen
+  for one click.
+- Left as it was found: "One tap" is the active profile, the pad is on layer 2, the bridge is
+  running and connected. "Three layers" stays saved in Input. With MicroBridge stopped, one
+  click on its row makes it active.
+
 ### Orca's plugin resume does not bring a chat back (2026-11-23 23:15 UTC), nothing built
 
 The owner asked for this try before deciding what a dim key does (D-045). A throwaway worker
@@ -927,8 +953,7 @@ and its settings were left as they were.
   tried: it is documented as opening a terminal. D-045 is still unproven and waits on the
   owner.
 - A three-layer pad profile is written (Claude, Orca, ChatGPT, each with layer 1's keys). It
-  is not imported: the owner does that in Work Louder Input, and whether the pad takes a third
-  layer is not known.
+  was imported later the same day (the entry "The pad took the three-layer profile").
 
 ### A second layer of the bridge's own, and layers kept apart (2026-11-23 22:40 UTC), built, not yet on the pad
 

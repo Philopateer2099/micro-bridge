@@ -432,3 +432,11 @@ Why: Orca has no way to reopen a closed chat as a chat. Tried on 2026-11-23 in t
 Consequence: A dim key only says that its chat was closed. To use the key again the owner holds it to free it and puts another chat on it. Nothing is started or opened by a tap on it.
 Rejected: A tap that opens a new chat in the same workspace and puts it on the key: Claude recommended it, and the owner turned it down. Continuing the old conversation in a terminal: the owner uses no terminal agents (D-046).
 By: owner
+
+## D-055 (2026-11-23): The three-layer profile stays saved but not active until the Orca build is installed
+
+Decision: Work Louder Input holds the profile "Three layers" (Claude, Orca, ChatGPT). The pad's active profile stays "One tap" until the build that knows Orca's layer is installed and the config names layer 3 as ChatGPT's. Then the profile, the build and the config change together.
+Why: The installed build knows two layers. With three on the pad, the way back from ChatGPT to Claude would take two taps, and layer 3 would belong to no app. The owner does not want a second tap.
+Consequence: Step 3's test on the pad starts with three changes at once: install the build, change the config, and set "Three layers" active in Input while MicroBridge is stopped. Until then the pad works as before. That a tap reaches layer 3 is still unseen.
+Rejected: Leaving "Three layers" active now: it would prove the third layer sooner, but it changes the owner's daily tap before anything uses the new layer.
+By: claude
