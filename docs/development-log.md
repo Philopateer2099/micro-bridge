@@ -862,6 +862,51 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Orca's chat, tried in the owner's working Orca (2026-11-23 23:10 UTC), nothing built
+
+Step 2 of the Orca build. The owner allowed their working Orca for it (D-049). Three test chats
+were started and closed there and one test file was written and deleted; the owner's own chat
+and its settings were left as they were.
+
+- An Orca chat runs Claude Code, so the bridge's hook already fires in it. Each test chat
+  reported to the bridge and waited for one of Claude's keys, and the one that asked for
+  approval took a key from a real session. `ClaudeHook.isLeftAlone` misses a chat: its process
+  has no `ORCA_TERMINAL_HANDLE`. It does have `ORCA_AGENT_SESSION_ID`, equal to the session ID
+  `orca agent list` shows, with `ORCA_STRUCTURED_SESSION=1` and `CLAUDE_CODE_ENTRYPOINT=orca`
+  (D-053).
+- `orca agent launch --agent claude --surface chat --worktree path:<dir>` opens a chat tab
+  without changing the view and prints its session ID. `--prompt` sends a first message.
+- A tab is one button. Its name is the state, the title, "Close tab" and the title again. Inside
+  it are a group described by the state ("Working", "Needs attention", "Unread agent
+  completion", "Done"; a new chat has none), the title as text, and a button "Close tab
+  <title>". The tab on screen has the class `bg-tab-active`. The tabs sit in the box
+  `group/tab-strip`.
+- The jump works: `micro click "*/<title>" com.stablyai.orca` pressed another chat's tab and
+  then the first one again, while a browser stayed in front. Orca did not come forward. Not
+  tried: a chat in another workspace, which needs `orca worktree activate` first.
+- The permission mode is a menu on each chat's message box, a pop-up button named
+  "Permissions <mode>": "Ask for approval", "Accept edits", "Approve for me", "Full access". It
+  is the chat's own: after one chat was set to "Ask for approval" the next new chat still
+  started in "Full access". The owner's chats are in "Full access" and never ask.
+- In "Ask for approval" a request to write a file put a card where the message box was: a
+  group named "Allow Write?" with "Cancel", "Allow", "Allow for this session", "Deny" and
+  "Details". Orca listed the chat as `blocked`, its tab said "Needs attention", and the hook
+  reported needs-you. `micro click "native-chat-appearance/=Deny" com.stablyai.orca` denied it
+  and no file appeared. On a second request `…/=Allow` allowed it and the file was written.
+  While it works the chat has a button "Stop the agent"; the message box has "Send", off
+  while the box is empty.
+- A closed chat does not come back as a chat by any way found. Closing the tab ends the chat's
+  Claude process, `orca agent list` drops it and `orca agent show` gives no place for it.
+  `orca agent read` still reads the conversation, and `orca search` finds it with a reference
+  to the chat and no resume command (a terminal session gets `claude --resume`). The command
+  line has nothing that reopens it, and neither the new-tab menu, the search (it offered tasks
+  and "Create worktree"), nor the menu bar offered it. The plugin method `agent.resume` was not
+  tried: it is documented as opening a terminal. D-045 is still unproven and waits on the
+  owner.
+- A three-layer pad profile is written (Claude, Orca, ChatGPT, each with layer 1's keys). It
+  is not imported: the owner does that in Work Louder Input, and whether the pad takes a third
+  layer is not known.
+
 ### A second layer of the bridge's own, and layers kept apart (2026-11-23 22:40 UTC), built, not yet on the pad
 
 Step 1 of the Orca build (D-050 to D-052, on D-047). No Orca was needed for it.

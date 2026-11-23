@@ -416,3 +416,11 @@ Why: The pad says nothing when a tap changes its layer, and the layer now decide
 Consequence: A tap takes up to a quarter second to count. The pad answers four small requests a second all day; over USB that showed no cost with layerKeys. Bluetooth is untried.
 Rejected: Reading once a second: a press in the first second after a tap goes by the wrong layer. Reading on each press: the answer takes longer than the press.
 By: claude
+
+## D-053 (2026-11-23): A session of an Orca chat belongs to Orca's layer and is known by Orca's session ID
+
+Decision: The Claude Code hook treats a session as an Orca chat when its environment has ORCA_AGENT_SESSION_ID and no ORCA_TERMINAL_HANDLE. It reports that session under Orca's session ID, for Orca's layer. Such a session never takes or waits for a key on Claude's layer.
+Why: Tried in the owner's Orca on 2026-11-23: every chat fired the bridge's hook, and one took a key from a real Claude session. The ID in the chat's environment is the one orca agent list shows, and a chat keeps it across /clear, which is what a key on Orca's layer holds (D-043).
+Consequence: Orca's layer gets working, needs-you and done from the same hook as Claude's layer, at once and without an Orca plugin or polling. The end of the session tells the bridge the tab closed. Until step 3 is built, Orca chats still take Claude's keys. Other agents in Orca's chat (Codex and the rest) report nothing this way.
+Rejected: Reading the state word in the tab's name: only tabs on screen have one. Polling orca agent list for the state: slower, and a second source to keep in step with the hook.
+By: claude
