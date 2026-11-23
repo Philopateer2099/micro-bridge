@@ -328,3 +328,11 @@ Why: umask belongs to the whole process. Tests run in parallel in one process, a
 Consequence: Between bind and chmod the socket has the usual mode for a moment, but it sits in the bridge's folder, which is 0700, so no other user can reach it. The test suite no longer fails at random.
 Rejected: Rerunning CI until it passed (the race stays). Running the settings tests one at a time (hides the cause).
 By: claude
+
+## D-042 (2026-11-22): GitHub hides the owner's email; the push block stays off
+
+Decision: On the owner's GitHub account "Keep my email addresses private" is on since 2026-11-22, and "Block command line pushes that expose my email" is off.
+Why: With privacy on, a pull request merged on GitHub is authored with the noreply address. Before, GitHub's own merge of a pull request carried the owner's personal address. The push block came on with it and refused every push whose newest commit has that address, which is every personal repo on the owner's Mac. The owner turned the block off the same hour.
+Consequence: The owner's GitHub profile shows no email. Pull requests on the public repo may be merged on GitHub. Nothing on GitHub's side stops the private history from being pushed to the public repo. The pre-push guard in the owner's working folder does that, and a fresh clone of the public repo has no private history to push.
+Rejected: Both off: a merge on GitHub would show the personal address. Both on, with the personal git settings switched to the noreply address: it changes the identity of every personal repo for a risk the folder's guard already covers.
+By: owner
