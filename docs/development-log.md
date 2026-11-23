@@ -862,6 +862,29 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Orca's plugin resume does not bring a chat back (2026-11-23 23:15 UTC), nothing built
+
+The owner asked for this try before deciding what a dim key does (D-045). A throwaway worker
+plugin was loaded in the owner's Orca as a development folder, with the access to read
+workspaces, hear agent status and start or resume agents. It answered three requests and was
+unloaded after; Orca's plugin list was the same 25 before and after.
+
+- `agent.resume` with the closed chat's Orca session ID answered `{ terminalId, started: true }`.
+  It opened a terminal that ran the Claude command with `--resume` and that ID, which is not
+  an ID Claude knows. The terminal stopped on Claude's question whether to trust the folder. It
+  was left unanswered and the terminal was closed.
+- `agent.resume` with the Claude session ID of the same chat failed: "Orca could not prepare
+  this session to resume" (the plugin's log: `agent_session_ownership_unknown`).
+- So no way is known to reopen a closed chat as a chat: not this method, and not the command
+  line, the new-tab menu, the search or the menu bar (the entry below). D-045 cannot be built
+  as written.
+- `workspace.readContext` gave the workspace on screen with an empty list of terminals while a
+  chat was its only tab: a plugin does not see chat tabs there. `workspace.open` is documented
+  to show a workspace as a click in the sidebar does (not tried). `agent.listSessions` needs
+  the access `history:read`, which the probe did not ask for.
+- Seen once: setting a chat's permission mode gave the chat a new Claude session ID, while its
+  Orca session ID stayed. A key that holds Orca's ID (D-053) is not thrown by that.
+
 ### Orca's chat, tried in the owner's working Orca (2026-11-23 23:10 UTC), nothing built
 
 Step 2 of the Orca build. The owner allowed their working Orca for it (D-049). Three test chats
