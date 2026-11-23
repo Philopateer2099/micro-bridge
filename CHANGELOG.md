@@ -31,6 +31,12 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
 - **One tap instead (optional):** a profile imported with Work Louder Input can give layer 2
   the Codex keys too. With `"layerKeys": true` the layer the pad is on then says who has it:
   ChatGPT on layer 2, MicroBridge on layer 1.
+- **A second layer of MicroBridge's own (optional, for Orca):** `"layerApps": {"2":
+  ["com.stablyai.orca"]}` makes layer 2 a layer MicroBridge drives itself, on a pad that has the
+  Codex keys there. The layers are kept apart: on layer 1 the keys, the dial and the stick do
+  nothing in Orca, and on layer 2 nothing in the Claude app or a terminal. In any other app they
+  act on both layers. Layer 2's six Agent Keys are its own and stay dark for now: Orca's agents
+  come next.
 
 ### The other controls
 

@@ -862,6 +862,34 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### A second layer of the bridge's own, and layers kept apart (2026-11-23 22:40 UTC), built, not yet on the pad
+
+Step 1 of the Orca build (D-050 to D-052, on D-047). No Orca was needed for it.
+
+- A new setting, `layerApps`, says which layers are the bridge's own and which apps each one is
+  for. Out of the box it is `{"1": ["claude", "terminal"]}` and nothing changes. With
+  `{"2": ["com.stablyai.orca"]}` layer 2 is the bridge's too: it acts on that layer's keys,
+  holds the pad there as on layer 1, and warns of nothing.
+- That layer has its own six Agent Keys. They hold no agents yet, so they are dark, and a press
+  of one does not act on the Claude session that has the same key on layer 1. Back on layer 1
+  the sessions show again.
+- The layers are kept apart. On layer 1 a key, the dial or the stick does nothing in Orca. On
+  layer 2 it does nothing in the Claude app or a terminal. In a browser it acts on both layers.
+  An Agent Key always acts. The log names every press that was stopped.
+- With ChatGPT on layer 3 and `layerKeys`, one tap moves on each time: Claude's keys, Orca's
+  keys, ChatGPT has the pad, and back.
+- The layer is read four times a second while a second layer is set, so a tap counts within a
+  quarter second.
+- Checked on the fake pad only, in 21 new tests (297: 245 for the bridge, 45 for the window,
+  7 for the helper's wire). Each new rule was also broken on purpose in a copy of the code, 16 ways, and
+  a test went red each time.
+- Two of the new tests failed now and then at first. They reached the daemon over its real
+  socket, and with tests running side by side the socket was not read within the client's 2 s.
+  The tests now hand the daemon the command directly (`take`), and wait until it has finished
+  talking to the pad before the next tap (`isBusy`).
+- Not done here: the pad has no layer with these keys yet (the owner imports that profile),
+  nothing was tried on the real pad or in Orca, and the window has no control for the setting.
+
 ### Orca, read and talked through before any code (2026-11-23 18:50 UTC), nothing built
 
 The owner opened the talk on Orca's layer (the issue "Orca on a layer of its own"). The

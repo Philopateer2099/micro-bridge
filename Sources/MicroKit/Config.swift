@@ -240,6 +240,12 @@ public struct Config: Sendable, Equatable {
     /// The pad has its own keys on the layers in `layers` as well, put there with Work Louder
     /// Input. Then one tap is enough: the layer the pad is on says who has it.
     public var layerKeys = false
+    /// The bridge's own layers and the apps each one is for, by layer number: app groups or
+    /// bundle ids. Layer 1 is always the bridge's. Any other layer here is one the bridge
+    /// drives itself: the pad has its keys there, put there with Work Louder Input, and the
+    /// bridge lights them and acts on them. Its controls do nothing in an app of another one
+    /// of these layers. See `layer(ofApp:)`.
+    public var layerApps: [Int: [String]] = [:]
     /// Show a notification when the pad is on a layer where its keys do not reach us.
     public var layerWarning = true
     /// Show a notification when the pad's battery falls to this percent while it is not charging.
@@ -287,6 +293,27 @@ public struct Config: Sendable, Equatable {
         return targets["default"]
     }
 
+    /// The layers besides the first that the bridge drives itself.
+    public var ownLayers: Set<Int> {
+        Set(layerApps.keys).subtracting([LayerWatch.ours])
+    }
+
+    /// Whether the bridge acts on that layer's keys itself: the first layer and `ownLayers`.
+    public func isOwn(layer: Int) -> Bool {
+        layer == LayerWatch.ours || layerApps[layer] != nil
+    }
+
+    /// The bundle ids `layerApps` names for that layer, its app groups spelled out.
+    public func apps(onLayer layer: Int) -> [String] {
+        (layerApps[layer] ?? []).flatMap { apps[$0] ?? [$0] }
+    }
+
+    /// The one of the bridge's own layers that app (a bundle id) belongs to, if any. The pad's
+    /// controls act in that app only while the pad is on that layer.
+    public func layer(ofApp app: String) -> Int? {
+        layerApps.keys.sorted().first { apps(onLayer: $0).contains(app) }
+    }
+
     public func hasDoubleTap(_ control: String, app: String? = nil) -> Bool {
         !actions(for: control, "doubleTap", app: app).isEmpty
     }
@@ -316,6 +343,7 @@ public struct Config: Sendable, Equatable {
       "stepAsideFor": ["com.openai.codex"],
       "layers": {},
       "layerKeys": false,
+      "layerApps": {"1": ["claude", "terminal"]},
       "layerWarning": true,
       "batteryWarning": 20,
       "clickGuard": 1,
@@ -478,6 +506,22 @@ public struct Config: Sendable, Equatable {
                     continue
                 }
                 config.layerKeys = flag
+            case "layerApps":
+                guard case let .object(pairs) = value else {
+                    reader.problems.append(#"layerApps: expected an object such as {"2": ["com.stablyai.orca"]}"#)
+                    continue
+                }
+                for (key, list) in pairs {
+                    guard let number = Int(key), (1 ... 9).contains(number) else {
+                        reader.problems.append("layerApps: \(key): expected a layer from 1 to 9")
+                        continue
+                    }
+                    guard case let .array(items) = list, items.allSatisfy({ $0.string?.isEmpty == false }) else {
+                        reader.problems.append("layerApps.\(key): expected a list of app groups or bundle ids")
+                        continue
+                    }
+                    config.layerApps[number] = items.compactMap(\.string)
+                }
             case "layerWarning":
                 guard let flag = value.bool else {
                     reader.problems.append("layerWarning: expected true or false")
@@ -558,7 +602,7 @@ public struct Config: Sendable, Equatable {
                 reader.control(value, name: "DIAL", at: "dial", allowed: ["cw", "ccw"] + triggers, bare: nil, into: &config.bindings)
             default:
                 reader.problems.append(
-                    "\(name): unknown section; use lighting, keystrokeApps, stepAsideFor, layers, layerKeys, layerWarning, batteryWarning, clickGuard, urgentFirst, rememberHours, apps, agentKeys, keys, stick, dial, commands")
+                    "\(name): unknown section; use lighting, keystrokeApps, stepAsideFor, layers, layerKeys, layerApps, layerWarning, batteryWarning, clickGuard, urgentFirst, rememberHours, apps, agentKeys, keys, stick, dial, commands")
             }
         }
         // Names can only be checked once every section is in.
@@ -567,6 +611,25 @@ public struct Config: Sendable, Equatable {
                 where target != "default" && config.apps[target] == nil && !target.contains(".") {
                 reader.problems.append(
                     "commands.\(name).\(target): no app group with that name; add it under apps, or use a bundle id or default")
+            }
+        }
+        var layerOf: [String: Int] = [:]
+        for layer in config.layerApps.keys.sorted() {
+            for name in config.layerApps[layer] ?? [] where config.apps[name] == nil && !name.contains(".") {
+                reader.problems.append(
+                    "layerApps.\(layer): \(name): no app group with that name; add it under apps, or use a bundle id")
+            }
+            if layer != LayerWatch.ours, let other = config.layers[layer] {
+                reader.problems.append(
+                    "layerApps.\(layer): layers gives this layer to \(other); a layer is the bridge's own or another app's, not both")
+            }
+            // An app on two layers would have no layer where the pad's controls act in it for sure.
+            for app in Set(config.apps(onLayer: layer)).sorted() {
+                if let first = layerOf[app] {
+                    reader.problems.append("layerApps.\(layer): \(app) is on layer \(first) already; an app belongs to one layer")
+                } else {
+                    layerOf[app] = layer
+                }
             }
         }
         for (binding, actions) in config.bindings.sorted(by: { $0.key < $1.key }) {

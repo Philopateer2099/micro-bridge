@@ -392,3 +392,27 @@ Why: The owner asked for an instance apart from the one they work in. A plain se
 Consequence: It starts with ORCA_E2E_USER_DATA_DIR, HOME set to the home folder inside it, and ORCA_E2E_HEADLESS=1; in this mode Orca refuses to start unless the home is the throwaway one. On 2026-11-23 the owner's Claude settings, ~/.orca, the orca command, the LaunchAgents and the Orca app were identical before and after. The sandbox has no Claude sign-in, so it shows no real permission prompt. With a window it stops on a macOS keychain dialog, so it runs headless only. It can still read the real home folder.
 Rejected: A plain second copy of Orca. Signing in to Claude inside the sandbox: it meets the keychain dialog.
 By: claude
+
+## D-050 (2026-11-23): The bridge's own layers and their apps live in one setting, layerApps
+
+Decision: A new setting, layerApps, maps a layer number to the apps it is for: app groups or bundle ids. Layer 1 is always the bridge's and starts as ["claude", "terminal"]. Any other layer listed there is one the bridge drives itself: the pad has its keys there, the bridge holds the pad and acts on them, and that layer has its own six Agent Keys. Orca's layer is {"2": ["com.stablyai.orca"]}. A layer the file leaves out keeps its apps, a layer cannot also be in layers, and an app belongs to one layer.
+Why: D-047 needs to know which app each layer is for, and a layer the bridge drives for Orca is not a layer that passes the pad to an app, which is what layers means. One setting answers both: which layers are the bridge's, and whose they are.
+Consequence: With only layer 1 listed, which is the default, nothing changes for anyone. On a second layer the six keys no longer show Claude's sessions, and a press there does not act on them. Until Orca's agents are built those keys hold nothing and stay dark. The window has no control for the setting yet.
+Rejected: A group name as a value in layers, next to bundle ids: one setting would mean two things, pass the pad on or keep it. A switch per app (orcaLayer: 2): it would need a new setting for the next app.
+By: claude
+
+## D-051 (2026-11-23): Isolation stops every control but the Agent Keys, and only in another layer's app
+
+Decision: While the pad is on one of the bridge's own layers, a key, the dial or the stick does nothing when the app in front belongs to another of those layers. That covers every action bound to the control, also lock, open and sh. An Agent Key is never stopped. An app on no layer, or nothing in front, gets the control's usual action on every layer. Terminals belong to Claude's layer.
+Why: This is how D-047 reads in code. The owner said a layer's controls do nothing in the other layer's app, and nothing is simplest to predict. An Agent Key brings its own app forward, so stopping it would leave no way across from the pad. The terminal bindings are all Claude Code's, so a terminal is Claude's.
+Consequence: On layer 1 with Orca in front, the dial's hold no longer opens the settings file and a key bound to lock does not lock. The log says each press that was stopped and why. The stick's push-to-scroll stops the same way.
+Rejected: Letting actions that are not about the app in front (lock, open, sh) through in another layer's app: two kinds of control to remember, and D-047 says nothing.
+By: claude
+
+## D-052 (2026-11-23): With a second layer of its own the bridge reads the layer four times a second
+
+Decision: While layerApps names a layer besides the first, the bridge asks the pad for its layer four times a second for as long as the pad is connected, as it already does with layerKeys while ChatGPT is open.
+Why: The pad says nothing when a tap changes its layer, and the layer now decides whose six keys show and where the controls act. Read once a second, the first press after a tap would often go by the old layer.
+Consequence: A tap takes up to a quarter second to count. The pad answers four small requests a second all day; over USB that showed no cost with layerKeys. Bluetooth is untried.
+Rejected: Reading once a second: a press in the first second after a tap goes by the wrong layer. Reading on each press: the answer takes longer than the press.
+By: claude

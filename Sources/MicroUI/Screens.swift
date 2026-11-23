@@ -1032,8 +1032,11 @@ struct SetupTab: View {
             var parts = ["Connected over \(bridge.transport ?? "USB")."]
             if let firmware = bridge.firmware { parts.append("Firmware \(firmware).") }
             if let battery = bridge.battery { parts.append("Battery \(battery)%" + (bridge.charging == true ? ", charging." : ".")) }
-            let away = bridge.layer.map { $0 != LayerWatch.ours } ?? false
+            let away = bridge.layer.map { !model.config.isOwn(layer: $0) } ?? false
             if away { parts.append("It is on layer \(bridge.layer ?? 0), where its keys are off.") }
+            if let layer = bridge.layer, !away, layer != LayerWatch.ours {
+                parts.append("It is on layer \(layer), one of MicroBridge's own.")
+            }
             list.append(Check(mark: away ? .warning : .good, title: "Pad", detail: parts.joined(separator: " ")))
         } else if bridge.running {
             list.append(Check(mark: .warning, title: "Pad", detail: "Not connected. Plug it in with its USB cable."))

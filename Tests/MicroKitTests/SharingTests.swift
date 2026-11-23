@@ -348,6 +348,49 @@ struct PadSharingTests {
         #expect(sharing.layer(2, running: open).pass == .tookBack(PadSharing.chatGPT, layer: 2))
     }
 
+    // MARK: Layers of the bridge's own
+
+    /// A second layer the bridge drives itself has the pad's keys. The bridge holds the pad
+    /// there as on its first layer, and no app gets the pad by it.
+    @Test func aLayerOfTheBridgesOwnIsHeldAndGivesNoAppThePad() {
+        var sharing = PadSharing(apps: [PadSharing.chatGPT])
+        sharing.own = [2]
+        _ = sharing.front(claude)
+        _ = sharing.layer(1, running: open)
+        #expect(sharing.hasKeys(on: 2) && !sharing.hasKeys(on: 3))
+        let read = sharing.layer(2, running: open)
+        #expect(read.pass == nil && read.change == nil)
+        #expect(sharing.asideFor == nil)
+        #expect(sharing.wantsHold(running: open, layer: 2, typedAt: nil, now: 100))
+        // Layer 3 has no keys: there the pad types as a keyboard and stays shared.
+        #expect(!sharing.wantsHold(running: open, layer: 3, typedAt: nil, now: 100))
+        // Without a layer of its own nothing is held on layer 2.
+        sharing.own = []
+        #expect(!sharing.wantsHold(running: open, layer: 2, typedAt: nil, now: 100))
+    }
+
+    /// One tap changes whose keys the pad's are, whatever runs: the layer is read often.
+    @Test func withALayerOfItsOwnTheBridgeReadsTheLayerOften() {
+        var sharing = PadSharing(apps: [PadSharing.chatGPT])
+        #expect(!sharing.watchesLayer(running: open))
+        sharing.own = [2]
+        #expect(sharing.watchesLayer(running: open))
+        #expect(sharing.watchesLayer(running: []))
+    }
+
+    /// Layer 1 and 2 are the bridge's, layer 3 is ChatGPT's: each tap says who has the pad.
+    @Test func withALayerOfItsOwnBeforeAnAppsLayerEachTapSaysWhoHasThePad() {
+        var sharing = withKeysOnTheLayer([3: PadSharing.chatGPT])
+        sharing.own = [2]
+        var read = sharing.layer(2, running: open)
+        #expect(read.pass == nil && read.change == nil && sharing.asideFor == nil)
+        read = sharing.layer(3, running: open)
+        #expect(read.pass == .handed(PadSharing.chatGPT, layer: 3) && read.change == .aside(PadSharing.chatGPT))
+        #expect(!sharing.wantsHold(running: open, layer: 3, typedAt: nil, now: 100))
+        read = sharing.layer(1, running: open)
+        #expect(read.pass == .tookBack(PadSharing.chatGPT, layer: 3) && read.change == .back)
+    }
+
     @Test func layerKeysIsReadFromTheConfig() throws {
         #expect(try !Config.parse(Config.defaultFileText).layerKeys)
         #expect(try Config.parse(#"{"layerKeys": true}"#).layerKeys)

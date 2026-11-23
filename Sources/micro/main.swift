@@ -223,6 +223,10 @@ case "config":
             print("leaves the pad to these apps while one is in front: \(config.stepAsideFor.isEmpty ? "none" : config.stepAsideFor.joined(separator: ", "))")
             print("layers that pass the pad to another app: \(config.layers.isEmpty ? "none" : config.layers.sorted { $0.key < $1.key }.map { "\($0.key) to \($0.value)" }.joined(separator: ", "))")
             print("the pad's keys are on those layers too, so one tap passes the pad: \(config.layerKeys ? "yes" : "no")")
+            for layer in config.layerApps.keys.sorted() {
+                let names = config.layerApps[layer] ?? []
+                print("layer \(layer) is the bridge's own, for: \(names.isEmpty ? "no app in particular" : names.joined(separator: ", "))")
+            }
             print("wrong-layer notification: \(config.layerWarning ? "on" : "off")")
             print("low-battery notification: \(config.batteryWarning > 0 ? "at \(config.batteryWarning)%" : "off")")
             print("quiet time after a click: \(config.clickGuard > 0 ? "\(config.clickGuard) s" : "off")")

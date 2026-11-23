@@ -445,7 +445,7 @@ final class BridgeModel: ObservableObject {
         if !bridge.connected {
             return NextStep(text: "The pad is not connected. Plug it in with its USB cable.")
         }
-        if let layer = bridge.layer, layer != LayerWatch.ours {
+        if let layer = bridge.layer, !config.isOwn(layer: layer) {
             return NextStep(text: "The pad is on layer \(layer), where its keys are off. Tap the touch sensor on its bottom-left edge.")
         }
         return nil

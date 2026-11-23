@@ -15,6 +15,10 @@ import Foundation
 /// A pad whose keys were put on those layers as well (`layerKeys`) needs no second tap: the
 /// layer it is on says who has it. On a layer in `layers` that is its app, on every other
 /// layer the bridge.
+///
+/// The bridge can have layers of its own besides the first (`own`): the pad's keys are there
+/// too, and the bridge acts on them itself, for the agents of an app that does not drive the
+/// pad, such as Orca. No app gets the pad by such a layer.
 public struct PadSharing: Sendable {
     /// Bundle ids the bridge leaves the pad to while one of them is in front.
     public var apps: [String]
@@ -24,6 +28,8 @@ public struct PadSharing: Sendable {
     /// The pad has its own keys on the layers in `layers` too, not only on the first one. Then
     /// being on a layer gives its app the pad, and leaving it gives the pad back.
     public var layerKeys = false
+    /// Layers besides the first that the bridge drives itself. The pad has its keys there.
+    public var own: Set<Int> = []
     /// The app the bridge is leaving the pad to now, if any.
     public private(set) var asideFor: String?
     /// Why: that app is in front, a visit to that layer gave it the pad, or the pad is on
@@ -148,16 +154,17 @@ public struct PadSharing: Sendable {
         return (pass, settle())
     }
 
-    /// Whether the pad's own keys reach its apps on that layer: the first one, and with
-    /// `layerKeys` every layer in `layers`.
+    /// Whether the pad's own keys reach its apps on that layer: the first one, the bridge's
+    /// other layers (`own`), and with `layerKeys` every layer in `layers`.
     public func hasKeys(on layer: Int) -> Bool {
-        layer == LayerWatch.ours || (layerKeys && layers[layer] != nil)
+        layer == LayerWatch.ours || own.contains(layer) || (layerKeys && layers[layer] != nil)
     }
 
-    /// Whether one tap can change who has the pad now, so the layer is worth reading often:
-    /// the layers have the pad's keys and one of their apps is open.
+    /// Whether one tap can change whose keys the pad's are now, so the layer is worth reading
+    /// often: the bridge has more than one layer of its own, or the layers have the pad's
+    /// keys and one of their apps is open.
     public func watchesLayer(running: Set<String>) -> Bool {
-        layerKeys && layers.values.contains(where: running.contains)
+        !own.isEmpty || (layerKeys && layers.values.contains(where: running.contains))
     }
 
     /// Settings changed: works out who has the pad again.

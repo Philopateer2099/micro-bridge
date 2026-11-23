@@ -18,6 +18,9 @@ struct DaemonWorld {
     /// What people call the app with that bundle id.
     var appName: @MainActor (String) -> String = { Daemon.name(ofApp: $0) }
     var log: @MainActor (String) -> Void = { print(ISO8601DateFormatter().string(from: Date()), $0) }
+    /// Scrolls what is under the pointer by that many points, positive up. Nil: as a mouse
+    /// wheel does. Tests count the points here, so that nothing on screen moves.
+    var scroll: (@MainActor (Double) -> Void)?
 
     var socket: String { directory + "/daemon.sock" }
     var config: String { directory + "/config.json" }
@@ -75,6 +78,8 @@ public final class Daemon {
     /// The pad's last answer to `device.status`, and the layer it put the pad on.
     private var padStatus: DeviceStatus?
     private var layers = LayerWatch()
+    /// The layer the bridge last acted on. See `actingLayer`.
+    private var actedLayer = LayerWatch.ours
     private var battery = BatteryWatch(threshold: 20)
 
     private var pad: Pad?
@@ -184,6 +189,8 @@ public final class Daemon {
         sharing.apps = config.stepAsideFor
         sharing.layers = config.layers
         sharing.layerKeys = config.layerKeys
+        sharing.own = config.ownLayers
+        _ = layerActedOn()
         frontChanged(world.frontApp())
         if config.typesKeys || config.lighting.offWhenLocked, !Accessibility.granted, !askedForAccessibility {
             askedForAccessibility = true
@@ -214,9 +221,7 @@ public final class Daemon {
             client.send(Reply.ok)
             client.send(Reply.connection(pad != nil))
         case .report, .end, .forget, .set, .clear:
-            if state.apply(command) { lightsChanged() }
-            client.send(Reply.ok)
-            flush()
+            take(command) { client.send(Reply.ok) }
         case let .pin(id, _), let .unpin(id):
             guard state.sessions[id] != nil else {
                 client.send(Reply.error("no session \"\(id)\""))
@@ -233,6 +238,18 @@ public final class Daemon {
             flush()
         }
     }
+
+    /// Does what a session said, or a key painted by hand. `answered` runs before the lights
+    /// are written, so whoever said it does not wait for the pad. Tests call it by hand.
+    func take(_ command: Command, answered: () -> Void = {}) {
+        if state.apply(command) { lightsChanged() }
+        answered()
+        flush()
+    }
+
+    /// A conversation with the pad is under way. Its wait for the answer runs the main run
+    /// loop, so a test can find itself in the middle of one after an `await`.
+    var isBusy: Bool { flushing }
 
     /// One second has passed. The timer calls it; tests call it by hand.
     func tick() {
@@ -272,8 +289,9 @@ public final class Daemon {
         checkShown()
         flush()
         connect()
-        // With `layers` set, a tap on the touch sensor passes the pad on: look often.
-        if ticks % 5 == 0 || !config.layers.isEmpty {
+        // With `layers` set, a tap on the touch sensor passes the pad on: look often. With a
+        // second layer of the bridge's own, a tap changes whose keys they are.
+        if ticks % 5 == 0 || !config.layers.isEmpty || !config.ownLayers.isEmpty {
             checkLayer()
             // Accessibility may have been granted since.
             watchShortcut()
@@ -424,7 +442,13 @@ public final class Daemon {
         activity()
         let now = ProcessInfo.processInfo.systemUptime
         let app = world.frontApp()
-        if case let .joystick(angle, distance) = event { stickMoved(angle: angle, distance: distance, app: app, at: now) }
+        if case let .joystick(angle, distance) = event {
+            if let its = otherLayer(of: app) {
+                stopScrolling(why: "\(app ?? "the app in front") is layer \(its)'s and the pad is on layer \(actingLayer)")
+            } else {
+                stickMoved(angle: angle, distance: distance, app: app, at: now)
+            }
+        }
         // An Agent Key that does something when held presses when it comes up, so that
         // holding it does not open its session first.
         let fired = gestures.handle(event, at: now, waitsForHold: { [config] control in
@@ -489,7 +513,7 @@ public final class Daemon {
         let points = scroller.step(speed: scrollSpeed, seconds: min(now - scrollStepAt, 0.1))
         scrollStepAt = now
         guard points != 0 else { return }
-        runner.scroll(points)
+        if let scroll = world.scroll { scroll(points) } else { runner.scroll(points) }
         if points > 0 { scrollPush.up += points } else { scrollPush.down -= points }
     }
 
@@ -505,6 +529,15 @@ public final class Daemon {
     }
 
     private func perform(_ fired: Gestures.Fired) {
+        let layer = actingLayer
+        if let pressed = fired.slot, layer != LayerWatch.ours {
+            // The sessions on the first layer's keys are not this layer's, and this layer's
+            // keys hold no agents yet.
+            if fired.trigger == "press" {
+                log("AG.press key \(pressed + 1) on layer \(layer): no agent on this key, nothing to do")
+            }
+            return
+        }
         if let slot = fired.slot, state.owner(of: slot) != nil, selected != slot {
             selected = slot
         }
@@ -527,6 +560,12 @@ public final class Daemon {
             if trigger == "empty", let pressed = fired.slot { log("AG.press key \(pressed + 1): no session on this key, nothing to do") }
             return
         }
+        // Layers are isolated: a control does nothing in an app of another layer. An Agent
+        // Key still acts, since it brings its own app to the front.
+        if fired.slot == nil, let its = otherLayer(of: app) {
+            log("\(fired.control).\(trigger) does nothing: \(app ?? "the app in front") is layer \(its)'s and the pad is on layer \(layer)")
+            return
+        }
         // By trigger, so a dial press that clicked a card's "Next" does not silence the turns after it.
         let guarded = "\(fired.control).\(trigger)#\(fired.slot ?? -1)"
         if clickGuard.blocks(guarded) {
@@ -537,7 +576,8 @@ public final class Daemon {
             state.reserve(pressed)
             reservedAt = Date()
         }
-        let slot = fired.slot ?? selected
+        // The key pressed last is a key of the first layer.
+        let slot = fired.slot ?? (layer == LayerWatch.ours ? selected : nil)
         let session = slot.flatMap { state.owner(of: $0) }
         let key = fired.slot.map { " key \($0 + 1)" } ?? ""
         let names = actions.map(\.description).joined(separator: ", ")
@@ -659,6 +699,7 @@ public final class Daemon {
         pad = nil
         padStatus = nil
         layers.reset()
+        actedLayer = LayerWatch.ours
         // The next pad's first reading is where it starts, not a visit. Who has the pad stays.
         _ = sharing.layer(nil, running: [])
         quickLayer?.invalidate()
@@ -835,7 +876,10 @@ public final class Daemon {
                     : "key \(pulses.sorted().map { String($0 + 1) }.joined(separator: ", ")) pulses: its session is on screen")
             }
             do {
-                var lights = state.lights(config.lighting, selected: pulses, dimmed: dark)
+                // Another layer of the bridge's own has its own six keys, with no agents yet.
+                var lights = actingLayer == LayerWatch.ours
+                    ? state.lights(config.lighting, selected: pulses, dimmed: dark)
+                    : (0 ..< BridgeState.slotCount).map { AgentStatus.off.light(slot: $0) }
                 for slot in blinked where lights.indices.contains(slot) { lights[slot] = AgentStatus.off.light(slot: slot) }
                 try pad.setSlots(lights, timeout: 2)
                 if unanswered > 0 {
@@ -954,6 +998,35 @@ public final class Daemon {
 
     // MARK: Layer
 
+    /// The layer the bridge acts on now: the pad's, while that is one of the bridge's own
+    /// (`layerApps`), and the first one on any other layer or before the pad has said.
+    private var actingLayer: Int {
+        guard let layer = padStatus?.layer, config.ownLayers.contains(layer) else { return LayerWatch.ours }
+        return layer
+    }
+
+    /// The layer `app` belongs to, when that is one of the bridge's own and not the one it
+    /// acts on now. Then the pad's controls do nothing in that app: the layer says which app
+    /// the pad is for.
+    private func otherLayer(of app: String?) -> Int? {
+        guard let app, let its = config.layer(ofApp: app), its != actingLayer else { return nil }
+        return its
+    }
+
+    /// Notes the layer the bridge acts on, and returns it when it changed. Then a push or a
+    /// hold begun on the other layer ends, and the keys are painted for this one.
+    private func layerActedOn() -> Int? {
+        let now = actingLayer
+        guard now != actedLayer else { return nil }
+        actedLayer = now
+        stopScrolling(why: "the pad changed layer")
+        gestures = Gestures()
+        holdTimer?.invalidate()
+        holdTimer = nil
+        dirty = true
+        return now
+    }
+
     /// Asks the pad which layer it is on. A tap on its touch sensor changes the layer without a
     /// word, and on every layer but the first its keys send this bridge nothing.
     private func checkLayer() {
@@ -975,6 +1048,7 @@ public final class Daemon {
         }
         guard self.pad === pad else { return }
         padStatus = status
+        let acting = layerActedOn()
         let before = sharing.reason
         let read = sharing.layer(status.layer, running: world.runningApps())
         if let pass = read.pass { passed(pass) }
@@ -985,6 +1059,19 @@ public final class Daemon {
         }
         let from = layers.layer
         let seen = layers.read(status.layer)
+        if let now = acting, status.layer == now, sharing.asideFor == nil {
+            let apps = config.apps(onLayer: now)
+            log("the pad is on layer \(now), one of the bridge's own: its keys and controls are for "
+                + (apps.isEmpty ? "no app in particular" : apps.joined(separator: ", ")))
+            // The first reading of a pad is where it starts, and `passed` has had its say.
+            if config.layerWarning, from != nil, read.pass == nil {
+                var names: [String] = []
+                for name in (config.layerApps[now] ?? []).map({ world.appName(config.apps[$0]?.first ?? $0) })
+                    where !names.contains(name) { names.append(name) }
+                notify(title: "Codex Micro is on layer \(now)",
+                       text: names.isEmpty ? "MicroBridge acts on its keys." : "Its keys are for \(names.joined(separator: " and ")).")
+            }
+        }
         switch seen {
         case let .away(layer) where sharing.hasKeys(on: layer):
             // No mishap: the pad's keys work on that layer, and `passed` said whose they are.
