@@ -320,3 +320,11 @@ Why: The owner asked that switching to a chat leave the pointer on it, so pushin
 Consequence: A tap moves the pointer when it is off the chat. It stays when it is on the chat already, when the user moved it since the press, and for a session in a terminal. A config with its own agentKeys press keeps it; the owner's got pane:chat added by hand.
 Rejected: Moving the pointer inside jump itself (no way to turn it off). Picking the largest pane as the chat (a wide web page would win).
 By: claude
+
+## D-041 (2026-11-22): The socket gets its mode from chmod, not umask
+
+Decision: SocketServer binds daemon.sock, then sets it to 0600 with chmod. It no longer changes the umask around bind.
+Why: umask belongs to the whole process. Tests run in parallel in one process, and a folder another test made while the socket was being bound came out 0600, with no execute bit, so nothing could be written into it. ClaudeSettingsTests and PluginTests failed now and then with permission denied, here and on CI for PR 4.
+Consequence: Between bind and chmod the socket has the usual mode for a moment, but it sits in the bridge's folder, which is 0700, so no other user can reach it. The test suite no longer fails at random.
+Rejected: Rerunning CI until it passed (the race stays). Running the settings tests one at a time (hides the cause).
+By: claude

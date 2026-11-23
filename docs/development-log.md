@@ -862,6 +862,18 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Tests that failed now and then (2026-11-23 01:05 UTC), fixed
+
+CI failed on PR 4 in `thePluginAndTheSettingsHookAreNeverBothOn`: permission denied writing a
+settings file into a folder the test had just made. The same test and a plugin test had failed
+now and then on this Mac too (D-041).
+
+- Cause: `SocketServer` set the umask to 0o177 around `bind`. The umask is the whole process's,
+  and the tests run in parallel, so a folder made by another test in that moment came out 0600,
+  without the execute bit, and nothing could go into it.
+- Fixed: the socket is bound, then set to 0600 with `chmod`. Its folder is 0700 already.
+- Five full runs in a row pass. Before, about one run in three failed.
+
 ### The stick leaves a web page, and a tap puts the pointer on the chat (2026-11-23 00:45 UTC), works on the pad
 
 The owner found the stick stuck in a web page in the Claude app's side pane: pushed left, the

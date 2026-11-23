@@ -87,10 +87,10 @@ public final class SocketServer {
         listener = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
         guard listener >= 0 else { throw .errno("socket") }
         let addr = try address(path)
-        let old = umask(0o177)
-        let bound = withSockaddr(addr) { bind(listener, $0, $1) }
-        umask(old)
-        guard bound == 0 else { throw .errno("bind \(path)") }
+        // Not umask: it is the whole process's, and a folder another thread makes meanwhile would
+        // come out 0600, which nothing can be written into. The folder is already 0700.
+        guard withSockaddr(addr, { bind(listener, $0, $1) }) == 0 else { throw .errno("bind \(path)") }
+        guard chmod(path, 0o600) == 0 else { throw .errno("chmod \(path)") }
         guard listen(listener, 16) == 0 else { throw .errno("listen") }
         _ = fcntl(listener, F_SETFL, O_NONBLOCK)
 
