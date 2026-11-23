@@ -4,6 +4,9 @@ Drives the Codex Micro keypad from Claude Code on macOS. Each of the six Agent K
 Claude Code session and lights by what that session is doing. The command keys, dial and stick
 approve, decline, fork, talk and move through Claude's question cards.
 
+Website: [microbridge.philopateer.dev](https://microbridge.philopateer.dev) shows the pad, what
+each control does and the install steps.
+
 > **Unofficial.** The Codex Micro is made by Work Louder for OpenAI and ships working with
 > ChatGPT and Codex. This project is not affiliated with, endorsed by or supported by OpenAI,
 > Work Louder or Anthropic.
