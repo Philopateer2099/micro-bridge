@@ -1,0 +1,13 @@
+#!/bin/sh
+# Stops the daemon and removes the login item and the installed app. Leaves the signing
+# certificate and the Input Monitoring entry; remove those in Keychain Access and System Settings.
+set -eu
+label=local.micro-bridge
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/$label.plist"
+rm -rf "$HOME/Applications/MicroBridge.app" "$HOME/Library/Application Support/micro-bridge"
+echo "removed"
+# The helper is root's, so this script cannot remove it.
+[ -f /Library/LaunchDaemons/local.micro-bridge.helper.plist ] &&
+	echo "MicroBridge Helper is still installed: remove it with sudo $(dirname "$0")/helper remove"
+exit 0

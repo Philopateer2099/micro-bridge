@@ -1,0 +1,12 @@
+#!/bin/sh
+# Adds, removes or shows the bridge's hook in Claude Code's user settings. The installed app does
+# the work (`micro hooks`), so a build from source and a download do exactly the same thing.
+#   scripts/claude-hooks status | install [--dry-run] | remove [--dry-run]
+set -eu
+micro="$HOME/Applications/MicroBridge.app/Contents/MacOS/micro"
+[ -x "$micro" ] || micro=/Applications/MicroBridge.app/Contents/MacOS/micro
+if [ ! -x "$micro" ]; then
+	echo "MicroBridge.app is not installed. Run scripts/install first." >&2
+	exit 1
+fi
+exec "$micro" hooks "$@"

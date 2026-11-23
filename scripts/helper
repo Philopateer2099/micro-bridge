@@ -1,0 +1,118 @@
+#!/bin/sh
+# MicroBridge Helper: the optional root helper that keeps the pad from other apps (ChatGPT)
+# while one of `stepAsideFor` runs behind another app. macOS lets only root do that (D-027).
+#
+#   sudo scripts/helper install [MicroBridge.app]   copy it out of the app and start it
+#   sudo scripts/helper restart                     start it again
+#   sudo scripts/helper remove                      stop it and delete everything it added
+#   scripts/helper status                           say whether it runs, and its last log lines
+#
+# A downloaded app carries this script at MicroBridge.app/Contents/Resources/helper.
+# Install copies the helper to /Library/PrivilegedHelperTools, which only root can change, and
+# adds /Library/LaunchDaemons/local.micro-bridge.helper.plist. Then switch on Input Monitoring
+# for "MicroBridge Helper" in System Settings.
+set -eu
+label=local.micro-bridge.helper
+target="/Library/PrivilegedHelperTools/MicroBridge Helper.app"
+plist="/Library/LaunchDaemons/$label.plist"
+log=/Library/Logs/micro-bridge-helper.log
+socket=/var/run/micro-bridge-helper.sock
+
+need_root() {
+	[ "$(id -u)" -eq 0 ] || { echo "helper: run it with sudo: sudo $0 $1" >&2; exit 1; }
+}
+
+case "${1:-status}" in
+install)
+	need_root install
+	# The account the helper serves: the one that ran sudo.
+	user=${SUDO_UID:-}
+	[ -n "$user" ] && [ "$user" -ne 0 ] || { echo "helper: run it with sudo from your own account" >&2; exit 1; }
+	home=$(dscl . -read "/Users/$(id -un "$user")" NFSHomeDirectory | sed 's/^NFSHomeDirectory: //')
+	app=${2:-}
+	if [ -z "$app" ]; then
+		here=$(cd "$(dirname "$0")" && pwd)
+		case "$here" in
+		*/MicroBridge.app/Contents/Resources) app=${here%/Contents/Resources} ;;
+		*)
+			for candidate in "$home/Applications/MicroBridge.app" /Applications/MicroBridge.app; do
+				[ -d "$candidate" ] && { app=$candidate; break; }
+			done
+			;;
+		esac
+	fi
+	source="$app/Contents/Library/Helpers/MicroBridge Helper.app"
+	[ -d "$source" ] || { echo "helper: no MicroBridge Helper in ${app:-any MicroBridge.app}. Build it with scripts/bundle and install the app first." >&2; exit 1; }
+
+	launchctl bootout "system/$label" 2>/dev/null || true
+	rm -rf "$target"
+	mkdir -p /Library/PrivilegedHelperTools
+	ditto "$source" "$target"
+	chown -R root:wheel "$target"
+	chmod -R go-w "$target"
+	# Checked once it is root's, so nothing can swap it after the check. It serves only
+	# programs signed with its own certificate, so an ad-hoc signature would serve nobody.
+	if ! codesign --verify --strict "$target" ||
+		! codesign -dvv "$target" 2>&1 | grep -q '^Identifier=local.micro-bridge.helper$' ||
+		! codesign -dvv "$target" 2>&1 | grep -q '^Authority='; then
+		rm -rf "$target"
+		echo "helper: it is not signed as MicroBridge Helper with a certificate (scripts/make-cert makes one)" >&2
+		exit 1
+	fi
+	cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$label</string>
+  <key>Program</key><string>$target/Contents/MacOS/micro-helper</string>
+  <key>ProgramArguments</key>
+  <array><string>micro-helper</string><string>--user</string><string>$user</string></array>
+  <key>AssociatedBundleIdentifiers</key><string>local.micro-bridge</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$log</string>
+  <key>StandardErrorPath</key><string>$log</string>
+</dict>
+</plist>
+PLIST
+	chown root:wheel "$plist"
+	chmod 644 "$plist"
+	launchctl bootstrap system "$plist"
+	echo "MicroBridge Helper is installed and running for uid $user."
+	echo "Next: System Settings > Privacy & Security > Input Monitoring, switch on MicroBridge Helper."
+	echo "If it is not listed, press + and pick $target"
+	echo "MicroBridge moves over to it within half a minute."
+	;;
+restart)
+	need_root restart
+	launchctl kickstart -k "system/$label"
+	echo "MicroBridge Helper started again."
+	;;
+remove)
+	need_root remove
+	launchctl bootout "system/$label" 2>/dev/null || true
+	rm -f "$plist" "$socket" "$log"
+	rm -rf "$target"
+	echo "MicroBridge Helper is removed. Its Input Monitoring entry stays until you remove it in System Settings."
+	;;
+status)
+	if [ ! -f "$plist" ]; then
+		echo "MicroBridge Helper is not installed."
+		exit 0
+	fi
+	if launchctl print "system/$label" 2>/dev/null | grep -q 'state = running'; then
+		echo "MicroBridge Helper is running."
+	else
+		echo "MicroBridge Helper is installed but not running."
+	fi
+	[ -S "$socket" ] && echo "Its socket is at $socket."
+	[ -r "$log" ] && { echo "Last log lines:"; tail -n 5 "$log"; }
+	exit 0
+	;;
+*)
+	echo "usage: sudo $0 install [MicroBridge.app] | sudo $0 restart | sudo $0 remove | $0 status" >&2
+	exit 2
+	;;
+esac

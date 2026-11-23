@@ -1,0 +1,38 @@
+#!/bin/sh
+# Looks for private data before it goes public: home folder paths, email addresses, session ids,
+# keys and tokens, and the protocol notes. CI runs it on every change.
+#   scripts/check-public [folder]    (default: this repository)
+# A made-up id used in a test goes in `madeup` below, so a real one still stands out.
+set -eu
+dir=${1:-$(cd "$(dirname "$0")/.." && pwd)}
+madeup='0a1b2c3d-1111-4222-8333-444455556666'
+found=0
+
+# Prints the matches of a pattern in text files: in a git repository only the files it tracks
+# (ignored notes and builds never go out), elsewhere every file.
+if [ -d "$dir/.git" ]; then
+	search() { git -C "$dir" grep -noIE "$1" | sed "s|^|$dir/|" || true; }
+	tracked() { git -C "$dir" ls-files --error-unmatch "$1" >/dev/null 2>&1; }
+else
+	search() { grep -rnoIE "$1" "$dir" || true; }
+	tracked() { [ -e "$dir/$1" ]; }
+fi
+report() {
+	[ -n "$2" ] || return 0
+	echo "✘ $1:"
+	echo "$2" | sed "s|^$dir/||; s/^/    /"
+	found=1
+}
+
+! tracked PROTOCOL.md || report "the protocol notes stay private" "$dir/PROTOCOL.md"
+# Placeholders such as /Users/x and the shared folder are fine.
+report "a home folder path" "$(search '/Users/[A-Za-z][A-Za-z0-9._-]+' | grep -v '/Users/Shared')"
+report "an email address" "$(search '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' |
+	grep -vE '(noreply@anthropic\.com|@users\.noreply\.github\.com|@example\.(com|org))$' |
+	grep -vE '@[0-9]x\.(png|jpg)$')"
+report "a session id (if it is made up, add it to madeup in scripts/check-public)" \
+	"$(search '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | grep -v "$madeup")"
+report "a key or token" "$(search 'ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----')"
+
+[ "$found" = 0 ] && echo "✔ no private data found in $dir"
+exit "$found"

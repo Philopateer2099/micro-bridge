@@ -1,0 +1,18 @@
+#!/bin/sh
+# The MicroBridge plugin's hook: hands each Claude Code event to the installed app's
+# `micro hook`. It prints nothing and exits 0 whatever happens, so it never gets in the way.
+settings="$HOME/.claude/settings.json"
+# The hook may also be in the settings file (`micro hooks install`). Then that one reports and
+# this one stays out, or every event would reach the bridge twice (D-024).
+if [ -f "$settings" ] && grep -qE "MicroBridge\.app/Contents/MacOS/micro'? hook" "$settings" 2>/dev/null; then
+	cat >/dev/null
+	exit 0
+fi
+for app in "$HOME/Applications/MicroBridge.app" /Applications/MicroBridge.app; do
+	if [ -x "$app/Contents/MacOS/micro" ]; then
+		exec "$app/Contents/MacOS/micro" hook
+	fi
+done
+# No app installed: nothing to tell.
+cat >/dev/null
+exit 0

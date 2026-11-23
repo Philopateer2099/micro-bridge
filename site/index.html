@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MicroBridge: the Codex Micro for Claude Code</title>
+<meta name="description" content="An unofficial macOS driver that makes the Codex Micro macropad work with Claude Code. Six keys, six sessions: each key glows with what its session is doing.">
+<meta property="og:title" content="MicroBridge: the Codex Micro for Claude Code">
+<meta property="og:description" content="Six keys, six sessions. Each key glows with what its session is doing, and a tap opens it. Unofficial, open source, macOS.">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230c0c0d'/%3E%3Crect x='6' y='6' width='20' height='20' rx='5' fill='%23304ffe'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0c0c0d;
+    --panel: #131315;
+    --raised: #1a1a1d;
+    --line: #2a2a2f;
+    --ink: #ece8df;
+    --dim: #a09c92;
+    --faint: #6f6c66;
+    --l-white: #f4f1ea;
+    --l-blue: #4d68ff;
+    --l-amber: #ff7a1a;
+    --l-green: #1eff62;
+    --l-red: #ff2450;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --round: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --wrap: 1120px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* The dot grid of a workbench mat, fading out down the page. */
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 900px;
+    background: radial-gradient(circle, #2c2c31 1px, transparent 1.2px) 0 0 / 22px 22px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+    opacity: .55;
+    pointer-events: none;
+    z-index: 0;
+  }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--l-blue); outline-offset: 3px; border-radius: 4px; }
+  .wrap { width: min(var(--wrap), 100% - 32px); margin-inline: auto; position: relative; z-index: 1; }
+
+  /* ---------- top bar ---------- */
+  header.bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; }
+  .mark { font: 600 15px/1 var(--mono); letter-spacing: .02em; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
+  .mark i { width: 12px; height: 12px; border-radius: 4px; background: var(--l-blue); box-shadow: 0 0 14px var(--l-blue); }
+  nav.links { display: flex; gap: 22px; font: 13px/1 var(--mono); }
+  nav.links a { color: var(--dim); text-decoration: none; padding: 6px 0; }
+  nav.links a:hover { color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 56px; align-items: center; padding: 48px 0 88px; }
+  .eyebrow { font: 12px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 0 0 22px; }
+  .eyebrow b { color: var(--l-amber); font-weight: 500; }
+  h1 { font: 400 clamp(2.5rem, 5.6vw, 4.5rem)/1.02 var(--serif); letter-spacing: -.02em; margin: 0 0 24px; text-wrap: balance; }
+  h1 em { font-style: italic; color: var(--l-white); }
+  .lede { font-size: 1.16rem; color: var(--dim); max-width: 33em; margin: 0 0 34px; }
+  .lede strong { color: var(--ink); font-weight: 500; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { font: 600 14px/1 var(--mono); text-decoration: none; padding: 15px 20px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); transition: border-color .15s, background .15s, transform .15s; }
+  .btn:hover { border-color: #4a4a52; transform: translateY(-1px); }
+  .btn.primary { background: var(--ink); color: #111; border-color: var(--ink); }
+  .btn.primary:hover { background: #fff; }
+  .fine { font: 12.5px/1.5 var(--mono); color: var(--faint); margin: 22px 0 0; max-width: 44em; }
+
+  /* ---------- the pad ---------- */
+  .bench { display: grid; justify-items: center; gap: 18px; }
+  .pad {
+    --u: clamp(46px, 14vw, 80px);
+    --gap: calc(var(--u) * .095);
+    display: grid;
+    grid-template-columns: repeat(4, var(--u));
+    grid-auto-rows: var(--u);
+    gap: var(--gap);
+    padding: calc(var(--u) * .3);
+    /* A white plate on a clear base, lit from below. The base is the border. */
+    border-radius: calc(var(--u) * .56);
+    background: linear-gradient(135deg, #fafbfa 0%, #e4e8e6 100%) padding-box, linear-gradient(180deg, #eef1f3 0%, #c3c9ce 100%) border-box;
+    border: calc(var(--u) * .22) solid transparent;
+    box-shadow: 0 0 calc(var(--u) * .7) rgba(255,255,255,.22), 0 40px 80px -30px rgba(0,0,0,.9);
+  }
+  .key {
+    --glow: transparent;
+    appearance: none;
+    border: 1px solid #fff;
+    border-radius: calc(var(--u) * .17);
+    background: linear-gradient(145deg, #fff 0%, #f7f8f7 48%, #dce1de 100%);
+    box-shadow: 0 calc(var(--u) * .04) calc(var(--u) * .05) rgba(0,0,0,.26);
+    color: #1b1c1b;
+    font: 700 calc(var(--u) * .135)/1 var(--round);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+    transition: transform .08s, background .35s, box-shadow .35s, border-color .35s, color .35s;
+  }
+  .key.down { transform: translateY(2px) scale(.97); }
+  .key.wide { grid-column: span 2; }
+  .key[data-state="idle"]      { --glow: var(--l-white); }
+  .key[data-state="working"]   { --glow: var(--l-blue); }
+  .key[data-state="needs-you"] { --glow: var(--l-amber); }
+  .key[data-state="done"]      { --glow: var(--l-green); }
+  .key[data-state="failed"]    { --glow: var(--l-red); }
+  /* The six Agent Keys are frosted: a lit one glows through its cap and onto the plate. */
+  .key[data-ag] { border-color: rgba(255,255,255,.9); background: linear-gradient(180deg, #e0e4e2 0%, #c6cbc9 100%); }
+  .key[data-state]:not([data-state="off"]) {
+    background: radial-gradient(circle at 50% 50%, #fff 0%, var(--glow) 26%, color-mix(in srgb, var(--glow) 36%, #dfe3e1) 78%);
+    box-shadow: 0 0 calc(var(--u) * .42) calc(var(--u) * -.02) color-mix(in srgb, var(--glow) 85%, transparent);
+  }
+  .key.shown { animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 50% { filter: saturate(.45) brightness(.9); } }
+  .key.flash { border-color: #b9bfbc; background: linear-gradient(180deg, #dfe3e1 0%, #cdd2d0 100%); }
+  .dial, .stick, .layer { display: grid; place-items: center; }
+  .dial span {
+    width: calc(var(--u) * .94); aspect-ratio: 1; border-radius: 50%;
+    background:
+      radial-gradient(circle at 40% 34%, #fff 0%, #dde1df 58%, #bcc1bf 100%),
+      repeating-conic-gradient(#aeb3b1 0 4deg, #f1f3f2 4deg 8deg);
+    background-clip: content-box, border-box;
+    padding: calc(var(--u) * .07);
+    box-shadow: 0 4px 10px rgba(0,0,0,.32);
+    position: relative;
+    transition: transform .5s cubic-bezier(.3,1.4,.5,1);
+  }
+  .dial span::after { content: ""; position: absolute; left: 50%; top: 17%; width: 3px; height: 17%; margin-left: -1.5px; border-radius: 2px; background: #2a2b2a; }
+  .stick { margin: 2%; border-radius: calc(var(--u) * .16); background: #c9cecc; border: 1px dashed rgba(0,0,0,.42); }
+  .stick span { width: calc(var(--u) * .7); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 38% 30%, #4b4b4b, #060606 70%); box-shadow: 0 4px 8px rgba(0,0,0,.45); }
+  .layer span { width: calc(var(--u) * .56); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 38% 30%, #3c3c3c, #050505 70%); box-shadow: 0 0 0 calc(var(--u) * .07) #d7dcda, 0 0 0 calc(var(--u) * .07 + 1px) #aab1ae; }
+  .readout { display: flex; align-items: flex-start; gap: 12px; width: min(100%, 440px); min-height: 4.6em; font: 13px/1.55 var(--mono); color: var(--dim); }
+  .readout p { margin: 0; flex: 1; }
+  .readout p b { color: var(--ink); font-weight: 500; }
+  .pause { appearance: none; background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--dim); font: 11px/1 var(--mono); padding: 6px 8px; cursor: pointer; white-space: nowrap; }
+  .pause:hover { color: var(--ink); border-color: #4a4a52; }
+  .note { font: 11.5px/1.4 var(--mono); color: var(--faint); margin: -6px 0 0; }
+
+  /* ---------- sections ---------- */
+  section { padding: 76px 0; border-top: 1px solid var(--line); }
+  .head { display: grid; grid-template-columns: 140px 1fr; gap: 24px; align-items: baseline; margin-bottom: 44px; }
+  .num { font: 12px/1.4 var(--mono); letter-spacing: .14em; color: var(--faint); text-transform: uppercase; }
+  h2 { font: 400 clamp(1.8rem, 3.4vw, 2.6rem)/1.1 var(--serif); letter-spacing: -.015em; margin: 0; text-wrap: balance; }
+  .body { margin-left: 164px; }
+
+  .lights { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .lights li { background: var(--panel); padding: 22px; display: grid; grid-template-columns: 34px 1fr; gap: 16px; align-items: center; }
+  .lamp { width: 34px; height: 34px; border-radius: 9px; background: var(--c); box-shadow: 0 0 22px -2px var(--c); }
+  .lamp.off { background: #1c1c1f; box-shadow: none; border: 1px solid #2c2c31; }
+  .lamp.pulse { animation: breathe 2.4s ease-in-out infinite; }
+  .lights b { display: block; font: 600 14px/1.3 var(--mono); }
+  .lights span { color: var(--dim); font-size: .92rem; line-height: 1.4; display: block; margin-top: 3px; }
+
+  .feats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 56px; }
+  .feats h3 { font: 600 1.06rem/1.3 var(--sans); margin: 0 0 8px; display: flex; gap: 12px; align-items: baseline; }
+  .feats h3 i { font: 400 12px/1 var(--mono); color: var(--faint); font-style: normal; }
+  .feats p { margin: 0; color: var(--dim); }
+
+  .flow { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; align-items: stretch; gap: 0; }
+  .node { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 22px; }
+  .node b { font: 600 14px/1.3 var(--mono); display: block; margin-bottom: 8px; }
+  .node p { margin: 0; color: var(--dim); font-size: .93rem; line-height: 1.5; }
+  .node.core { border-color: #45454d; background: var(--raised); }
+  .wire { display: grid; place-items: center; padding: 0 14px; font: 11px/1.3 var(--mono); color: var(--faint); text-align: center; min-width: 96px; }
+  .wire::after { content: ""; display: block; width: 100%; height: 1px; margin-top: 8px; background: repeating-linear-gradient(90deg, #55555d 0 6px, transparent 6px 11px); }
+
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: 14px; }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 16px; align-items: start; }
+  ol.steps li::before { content: counter(s); font: 600 13px/34px var(--mono); width: 34px; height: 34px; text-align: center; border: 1px solid var(--line); border-radius: 9px; color: var(--dim); }
+  ol.steps p { margin: 4px 0 10px; }
+  ol.steps p small { color: var(--dim); font-size: .92rem; }
+  ol.steps p small code { font: .88rem var(--mono); color: var(--ink); }
+  .cmd { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: #09090a; overflow: hidden; }
+  .cmd code { flex: 1; min-width: 0; font: 13.5px/1.5 var(--mono); padding: 13px 16px; overflow-x: auto; white-space: nowrap; color: var(--ink); }
+  .cmd code::before { content: "$ "; color: var(--faint); }
+  .cmd button { appearance: none; border: 0; border-left: 1px solid var(--line); background: var(--panel); color: var(--dim); font: 12px/1 var(--mono); padding: 0 16px; cursor: pointer; min-width: 72px; }
+  .cmd button:hover { color: var(--ink); background: var(--raised); }
+
+  pre.json { margin: 0; border: 1px solid var(--line); border-radius: 14px; background: #09090a; padding: 22px 24px; font: 13.5px/1.7 var(--mono); overflow-x: auto; color: var(--dim); }
+  figure.shot { margin: 44px 0 0; }
+  figure.shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 14px; }
+  figure.shot figcaption { margin-top: 12px; color: var(--faint); font-size: 13.5px; }
+  pre.json .k { color: var(--ink); }
+  pre.json .s { color: #9db0ff; }
+  .two { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 44px; align-items: start; }
+  .two p { margin: 0 0 16px; color: var(--dim); }
+  .two p strong, .safe strong { color: var(--ink); font-weight: 500; }
+  code.i { font: .88em var(--mono); background: var(--raised); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; color: var(--ink); white-space: nowrap; }
+
+  .safe { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 56px; color: var(--dim); }
+  .safe li { padding-left: 22px; position: relative; }
+  .safe li::before { content: ""; position: absolute; left: 0; top: .62em; width: 8px; height: 8px; border-radius: 2px; background: var(--l-green); box-shadow: 0 0 10px var(--l-green); }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0 64px; color: var(--faint); font: 13px/1.7 var(--mono); }
+  footer p { margin: 0 0 12px; max-width: 70em; }
+  footer a { color: var(--dim); }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; gap: 48px; padding-top: 24px; }
+    .head { grid-template-columns: 1fr; gap: 10px; margin-bottom: 30px; }
+    .body { margin-left: 0; }
+    .lights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .feats, .two, .safe { grid-template-columns: 1fr; gap: 30px; }
+    .flow { grid-template-columns: 1fr; }
+    .wire { padding: 12px 0; }
+    .wire::after { width: 1px; height: 22px; margin: 8px auto 0; background: repeating-linear-gradient(180deg, #55555d 0 6px, transparent 6px 11px); }
+    section { padding: 56px 0; }
+  }
+  @media (max-width: 520px) {
+    .lights { grid-template-columns: 1fr; }
+    nav.links a.opt { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .key.shown, .lamp.pulse { animation: none; }
+    .key, .dial span, .btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="bar">
+    <a class="mark" href="#top"><i aria-hidden="true"></i>MicroBridge</a>
+    <nav class="links" aria-label="Page">
+      <a class="opt" href="#lights">Lights</a>
+      <a class="opt" href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/Philopateer2099/micro-bridge">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div>
+        <p class="eyebrow"><b>Unofficial</b> &nbsp;·&nbsp; macOS &nbsp;·&nbsp; open source</p>
+        <h1>Your Codex Micro, wired to <em>Claude Code</em>.</h1>
+        <p class="lede"><strong>Six keys, six sessions.</strong> Each key glows with what its session is doing. A tap opens it. Approve, decline and answer question cards without reaching for the mouse.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/Philopateer2099/micro-bridge">Get it on GitHub</a>
+          <a class="btn" href="#install">Install steps</a>
+        </div>
+        <p class="fine">Not affiliated with OpenAI, Work Louder or Anthropic. You need your own Codex Micro.</p>
+      </div>
+
+      <div class="bench">
+        <div class="pad" role="group" aria-label="A drawing of the pad. Its lights play through an example.">
+          <div class="dial" aria-hidden="true"><span id="dial"></span></div>
+          <button class="key" data-ag="0" data-state="off"></button>
+          <button class="key" data-ag="1" data-state="off"></button>
+          <div class="stick" aria-hidden="true"><span></span></div>
+          <button class="key" data-ag="2" data-state="off"></button>
+          <button class="key" data-ag="3" data-state="off"></button>
+          <button class="key" data-ag="4" data-state="off"></button>
+          <button class="key" data-ag="5" data-state="off"></button>
+          <button class="key" data-act="fast" aria-label="Fast key">Fast</button>
+          <button class="key" data-act="approve" aria-label="Approve key">Yes</button>
+          <button class="key" data-act="decline" aria-label="Decline key">No</button>
+          <button class="key" data-act="fork" aria-label="Fork key">Fork</button>
+          <div class="layer" aria-hidden="true"><span></span></div>
+          <button class="key wide" data-act="mic" aria-label="Mic key">Mic</button>
+          <button class="key" data-act="send" aria-label="Send key">Send</button>
+        </div>
+        <p class="note">A drawing, not to scale. Click the keys.</p>
+        <div class="readout">
+          <p id="say">&nbsp;</p>
+          <button class="pause" id="pause" type="button" aria-pressed="false">Pause</button>
+        </div>
+      </div>
+    </div>
+
+    <section id="lights">
+      <div class="head"><span class="num">01 / Lights</span><h2>One look tells you which session wants you.</h2></div>
+      <div class="body">
+        <ul class="lights">
+          <li><i class="lamp" style="--c: var(--l-white)"></i><div><b>White</b><span>Idle. Waiting for your next prompt.</span></div></li>
+          <li><i class="lamp" style="--c: var(--l-blue)"></i><div><b>Blue</b><span>Working.</span></div></li>
+          <li><i class="lamp" style="--c: var(--l-amber)"></i><div><b>Amber</b><span>Needs you: a permission prompt or a question.</span></div></li>
+          <li><i class="lamp" style="--c: var(--l-green)"></i><div><b>Green</b><span>Done, and you have not looked yet.</span></div></li>
+          <li><i class="lamp" style="--c: var(--l-red)"></i><div><b>Red</b><span>The turn failed.</span></div></li>
+          <li><i class="lamp pulse" style="--c: var(--l-white)"></i><div><b>Slow pulse</b><span>The session on screen right now.</span></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="does">
+      <div class="head"><span class="num">02 / Keys</span><h2>What the pad does once it is plugged in.</h2></div>
+      <div class="body feats">
+        <div><h3><i>a</i>One key per session</h3><p>A session takes an Agent Key the first time it does something. Sessions in the Claude app and in a terminal both count.</p></div>
+        <div><h3><i>b</i>Tap to open</h3><p>A tap brings that session up in the Claude app. Hold the key for half a second to clear it.</p></div>
+        <div><h3><i>c</i>Approve and decline</h3><p>The keys press the real buttons: "Allow once", "Deny", "Next", "Submit", "Skip", and the suggested next step.</p></div>
+        <div><h3><i>d</i>The dial answers cards</h3><p>Turn it to move through the answers of a question card. Press it to pick one.</p></div>
+        <div><h3><i>e</i>Keys remember</h3><p>A session that ended keeps its key, and a tap opens it again. Keys also survive a restart of the bridge.</p></div>
+        <div><h3><i>f</i>More than six sessions</h3><p>The six most urgent sessions hold the keys. One that needs you takes the key of one that is only idle.</p></div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="head"><span class="num">03 / Wiring</span><h2>A small daemon between Claude Code and the pad.</h2></div>
+      <div class="body">
+        <div class="flow">
+          <div class="node"><b>Claude Code</b><p>Runs a hook on each event: a prompt, a tool call, a permission request, the end of a turn.</p></div>
+          <div class="wire">hooks</div>
+          <div class="node core"><b>MicroBridge</b><p>Gives each session a key and a light. Turns a key press into a key typed or a button pressed in the app in front.</p></div>
+          <div class="wire">USB</div>
+          <div class="node"><b>Codex Micro</b><p>Shows the lights. Sends its keys, dial and stick back.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="head"><span class="num">04 / Install</span><h2>Six commands, from clone to first light.</h2></div>
+      <div class="body">
+        <ol class="steps">
+          <li><div><p>Get the code. <small>You need macOS 14 or later and Swift 6. No toolchain yet? Run <code>xcode-select --install</code> first.</small></p><div class="cmd"><code>git clone https://github.com/Philopateer2099/micro-bridge.git &amp;&amp; cd micro-bridge</code><button type="button">Copy</button></div></div></li>
+          <li><div><p>Create a signing certificate, once. <small>Self-signed. It lets macOS keep the app's permissions when you rebuild.</small></p><div class="cmd"><code>scripts/make-cert</code><button type="button">Copy</button></div></div></li>
+          <li><div><p>Build and install. <small>The app goes to ~/Applications and starts at login.</small></p><div class="cmd"><code>scripts/install</code><button type="button">Copy</button></div></div></li>
+          <li><div><p>Give it access. <small>Then switch MicroBridge on under Input Monitoring and Accessibility in System Settings.</small></p><div class="cmd"><code>scripts/micro access</code><button type="button">Copy</button></div></div></li>
+          <li><div><p>Restart the bridge.</p><div class="cmd"><code>launchctl kickstart -k "gui/$(id -u)/local.micro-bridge"</code><button type="button">Copy</button></div></div></li>
+          <li><div><p>Tell Claude Code to report to it. <small>Adds one hook to ~/.claude/settings.json, after backing it up, or creates the file if there is none yet.</small></p><div class="cmd"><code>scripts/claude-hooks install</code><button type="button">Copy</button></div></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="config">
+      <div class="head"><span class="num">05 / Config</span><h2>Every key is one line in one file.</h2></div>
+      <div class="body two">
+        <div>
+          <p><strong>Hold the dial</strong> to open the file. Save it, and the pad follows within a second.</p>
+          <p>A key can type text, send a key combination, press a button on screen, run a shell command or open a link. The same key can do one thing in the Claude app and another in a terminal.</p>
+          <p>Colors, brightness and the low-battery warning are in the same file.</p>
+          <p><strong>Or open the window.</strong> MicroBridge.app shows the six keys live, lets you pick a command for each key on a drawing of the pad, and checks the setup step by step.</p>
+        </div>
+<pre class="json"><span class="k">"keys"</span>: {
+  <span class="k">"ACT06"</span>: <span class="s">"cmd:NEW"</span>,
+  <span class="k">"ACT07"</span>: <span class="s">"cmd:APPR"</span>,
+  <span class="k">"ACT09"</span>: [<span class="s">"sh:git stash"</span>,
+            <span class="s">"text:stashed\n"</span>],
+  <span class="k">"ACT12"</span>: { <span class="k">"press"</span>: <span class="s">"key:return"</span>,
+             <span class="k">"hold"</span>: <span class="s">"key:escape"</span> }
+},
+<span class="k">"lighting"</span>: {
+  <span class="k">"colors"</span>: { <span class="k">"working"</span>: <span class="s">"#304FFE"</span> }
+}</pre>
+      </div>
+      <figure class="shot">
+        <img src="window.png" width="1080" height="800" loading="lazy" alt="The MicroBridge window: a drawing of the pad with six lit Agent Keys above a list of the session on each key.">
+        <figcaption>The MicroBridge window. The sessions in the picture are made up.</figcaption>
+      </figure>
+    </section>
+
+    <section id="safety">
+      <div class="head"><span class="num">06 / Safety</span><h2>What it touches, and what it leaves alone.</h2></div>
+      <div class="body">
+        <ul class="safe">
+          <li><strong>Five commands to the pad.</strong> Read the version and status, set the lights. It never writes to the pad's storage or firmware.</li>
+          <li><strong>No network.</strong> The hook and the daemon talk over a local socket. Nothing leaves your Mac.</li>
+          <li><strong>Two macOS permissions.</strong> Input Monitoring to read the pad. Accessibility to type keys and press buttons in the app in front.</li>
+          <li><strong>Open source.</strong> Swift, MIT license, no third-party code at run time. Read every line before you grant it anything.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>MicroBridge is an independent project. It is not affiliated with, endorsed by or supported by OpenAI, Work Louder or Anthropic. "Codex Micro", "ChatGPT" and "Claude" are names of their owners' products, used here only to say what the bridge works with.</p>
+    <p><a href="https://github.com/Philopateer2099/micro-bridge">Source</a> &nbsp;·&nbsp; <a href="https://github.com/Philopateer2099/micro-bridge/blob/main/docs/configuration.md">Configuration</a> &nbsp;·&nbsp; <a href="https://github.com/Philopateer2099/micro-bridge/blob/main/docs/features.md">Feature list</a> &nbsp;·&nbsp; <a href="https://github.com/Philopateer2099/micro-bridge/blob/main/LICENSE">MIT license</a></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var names = { off: "no session", idle: "idle", working: "working", "needs-you": "needs you", done: "done, not read", failed: "failed" };
+  var agents = [].slice.call(document.querySelectorAll("[data-ag]"));
+  var acts = {};
+  [].forEach.call(document.querySelectorAll("[data-act]"), function (k) { acts[k.dataset.act] = k; });
+  var say = document.getElementById("say");
+  var dial = document.getElementById("dial");
+  var pause = document.getElementById("pause");
+  var state = ["off", "off", "off", "off", "off", "off"];
+  var shown = -1, turn = 0;
+
+  function paint() {
+    agents.forEach(function (key, i) {
+      key.dataset.state = state[i];
+      key.classList.toggle("shown", i === shown && state[i] !== "off");
+      key.setAttribute("aria-label", "Agent Key " + (i + 1) + ": " + names[state[i]]);
+    });
+  }
+  function tell(html) { say.innerHTML = html; }
+  function press(key) {
+    key.classList.add("down", "flash");
+    setTimeout(function () { key.classList.remove("down", "flash"); }, 260);
+  }
+  function tapAgent(i) {
+    press(agents[i]);
+    if (state[i] === "off") { tell("<b>Key " + (i + 1) + "</b> is dark: no session on it, so nothing happens."); return; }
+    if (state[i] === "done" || state[i] === "failed") state[i] = "idle";
+    shown = i;
+    paint();
+    tell("<b>Key " + (i + 1) + "</b> tapped: its session opens. The key pulses while it is on screen.");
+  }
+  function answer(yes) {
+    press(acts[yes ? "approve" : "decline"]);
+    var hit = state.indexOf("needs-you");
+    if (hit < 0) { tell(yes ? "<b>Approve</b>: nothing is waiting right now." : "<b>Decline</b>: nothing is waiting right now."); return; }
+    state[hit] = yes ? "working" : "idle";
+    paint();
+    tell(yes ? "<b>Approve</b> presses \"Allow once\". Key " + (hit + 1) + " goes back to work."
+             : "<b>Decline</b> presses \"Deny\". Key " + (hit + 1) + " stops and waits.");
+  }
+
+  // The example that plays by itself.
+  var script = [
+    function () { state = ["working", "idle", "working", "off", "off", "off"]; shown = 1; tell("Three sessions, three keys. <b>Blue</b> is working. <b>White</b> is idle."); },
+    function () { state[2] = "needs-you"; tell("<b>Key 3</b> turns amber: a permission prompt is waiting."); },
+    function () { answer(true); },
+    function () { state[0] = "done"; tell("<b>Key 1</b> turns green: finished, and you have not looked yet."); },
+    function () { tapAgent(0); },
+    function () { state[3] = "working"; tell("A new session starts. It takes the next free key: <b>key 4</b>."); },
+    function () { state[2] = "failed"; tell("<b>Key 3</b> turns red: that turn failed."); },
+    function () { turn += 40; dial.style.transform = "rotate(" + turn + "deg)"; state[3] = "needs-you"; tell("<b>Key 4</b> asks a question. Turn the <b>dial</b> to move through the answers, press it to pick."); },
+    function () { state[3] = "working"; tell("Answered. <b>Key 4</b> goes back to work."); }
+  ];
+  var step = 0, timer = null, still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function next() { script[step % script.length](); paint(); step++; }
+  function play() { if (!timer) timer = setInterval(next, 2800); pause.textContent = "Pause"; pause.setAttribute("aria-pressed", "false"); }
+  function stop() { clearInterval(timer); timer = null; pause.textContent = "Play"; pause.setAttribute("aria-pressed", "true"); }
+
+  agents.forEach(function (key, i) { key.addEventListener("click", function () { tapAgent(i); }); });
+  acts.approve.addEventListener("click", function () { answer(true); });
+  acts.decline.addEventListener("click", function () { answer(false); });
+  acts.fast.addEventListener("click", function () { press(acts.fast); tell("<b>Fast</b> types /fast into the session in front."); });
+  acts.fork.addEventListener("click", function () { press(acts.fork); tell("<b>Fork</b> branches the session in front."); });
+  acts.mic.addEventListener("click", function () { press(acts.mic); tell("<b>Mic</b> starts dictation in the Claude app."); });
+  acts.send.addEventListener("click", function () { press(acts.send); tell("<b>Send</b> presses Return."); });
+  pause.addEventListener("click", function () { timer ? stop() : play(); });
+  document.addEventListener("visibilitychange", function () { if (document.hidden && timer) { clearInterval(timer); timer = null; } else if (!document.hidden && pause.getAttribute("aria-pressed") === "false" && !still) play(); });
+
+  if (still) {
+    state = ["working", "needs-you", "done", "idle", "failed", "off"];
+    paint();
+    tell("Six keys, six sessions. Click a key to see what it does.");
+    stop();
+  } else {
+    next();
+    play();
+  }
+
+  [].forEach.call(document.querySelectorAll(".cmd button"), function (button) {
+    button.addEventListener("click", function () {
+      var text = button.previousElementSibling.textContent;
+      var done = function () { button.textContent = "Copied"; setTimeout(function () { button.textContent = "Copy"; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+})();
+</script>
+</body>
+</html>

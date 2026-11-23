@@ -1,0 +1,62 @@
+name: Something is wrong
+description: The pad, a key, the lights or the window does not do what it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. A security problem goes in private instead: see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did on the pad, and what happened instead of what you expected.
+      placeholder: I pressed Approve on a permission card in the Claude app and nothing happened.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Open a Claude Code session in the Claude app
+        2. Ask for something that needs permission
+        3. Press Approve
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it happened
+      options:
+        - The Claude app
+        - A terminal (Terminal, Ghostty or another)
+        - The MicroBridge window
+        - The lights, in any app
+        - Somewhere else
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: macOS and Claude app versions
+      placeholder: macOS 15.2, Claude 1.2.3
+    validations:
+      required: true
+  - type: textarea
+    id: pad
+    attributes:
+      label: The pad
+      description: The output of `scripts/micro status`, and whether the pad is on USB or Bluetooth.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: The log around the time it happened
+      description: |
+        Lines from `~/Library/Logs/micro-bridge.log`. They can hold session ids and folder names:
+        take out anything you do not want to be public.
+      render: text
+  - type: input
+    id: config
+    attributes:
+      label: Your config
+      description: The output of `scripts/micro config check`, and anything you changed in it.

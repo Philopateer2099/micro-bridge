@@ -1,0 +1,28 @@
+#!/bin/sh
+# Runs `micro <args>` inside MicroBridge.app through Launch Services, so the app (not this
+# shell) is the process macOS checks for Input Monitoring. Output streams here.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+app="$root/.build/MicroBridge.app"
+[ -d "$app" ] || "$root/scripts/bundle" >/dev/null
+
+# ctl only talks to the daemon's socket: no pad access, so no app wrapper needed. With no
+# command, list them here: the app opened with no command shows its window.
+if [ "${1:-help}" = ctl ] || [ "${1:-help}" = help ]; then
+	exec "$app/Contents/MacOS/micro" "$@"
+fi
+# The window: open it the way Finder does, and do not wait for it to close.
+if [ "$1" = app ]; then
+	exec open -n "$app" --args "$@"
+fi
+
+out=$(mktemp -t micro-out)
+trap 'rm -f "$out"' EXIT
+open -W -n "$app" --stdout "$out" --stderr "$out" --args "$@" &
+launcher=$!
+# Stream the output while the app runs.
+tail -n +1 -f "$out" &
+tailer=$!
+wait "$launcher" || true
+sleep 0.2
+kill "$tailer" 2>/dev/null || true

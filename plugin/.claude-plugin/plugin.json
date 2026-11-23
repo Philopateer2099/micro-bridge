@@ -1,0 +1,12 @@
+{
+  "name": "micro-bridge",
+  "version": "0.1.0",
+  "description": "Tells MicroBridge what each Claude Code session is doing, so the Codex Micro's keys light up for it. Needs MicroBridge.app installed. Unofficial; not made by OpenAI, Work Louder or Anthropic.",
+  "author": {
+    "name": "Philopateer2099"
+  },
+  "homepage": "https://github.com/Philopateer2099/micro-bridge",
+  "repository": "https://github.com/Philopateer2099/micro-bridge",
+  "license": "MIT",
+  "keywords": ["macropad", "codex-micro", "hooks", "macos"]
+}

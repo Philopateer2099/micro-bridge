@@ -1,0 +1,14 @@
+{
+  "name": "micro-bridge",
+  "description": "The MicroBridge plugin, from the MicroBridge repository: an unofficial bridge between the Codex Micro macropad and Claude Code on macOS.",
+  "owner": {
+    "name": "Philopateer2099"
+  },
+  "plugins": [
+    {
+      "name": "micro-bridge",
+      "source": "./plugin",
+      "description": "Tells MicroBridge what each Claude Code session is doing, so the Codex Micro's keys light up for it. Needs MicroBridge.app installed."
+    }
+  ]
+}

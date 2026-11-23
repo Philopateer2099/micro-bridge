@@ -1,0 +1,100 @@
+#!/bin/sh
+# Builds micro and wraps it in MicroBridge.app, so macOS asks for Input Monitoring for this
+# one program instead of the terminal or app that started it. Opened from Finder, the app shows
+# the MicroBridge window; started with a command, it is the command-line tool and the daemon.
+set -eu
+cd "$(dirname "$0")/.."
+version=$(cat VERSION)
+
+# A failed build stops here, so an old binary never ships under the new version.
+build=$(mktemp -t micro-build)
+status=0
+{ swift build -c release --product micro && swift build -c release --product micro-helper; } >"$build" 2>&1 || status=$?
+grep -vE 'ld: warning: search path' "$build" || true
+rm -f "$build"
+[ "$status" -eq 0 ] || { echo "bundle: the build failed" >&2; exit "$status"; }
+app=.build/MicroBridge.app
+rm -rf "$app"
+mkdir -p "$app/Contents/MacOS"
+cp .build/release/micro "$app/Contents/MacOS/micro"
+cat > "$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>local.micro-bridge</string>
+  <key>CFBundleName</key><string>MicroBridge</string>
+  <key>CFBundleExecutable</key><string>micro</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>$version</string>
+  <key>CFBundleShortVersionString</key><string>$version</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSUIElement</key><true/>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+</dict>
+</plist>
+PLIST
+# The app's own login item (D-025): the window's "Start at login" registers it, and macOS lists
+# it under Login Items. It runs the bridge from wherever the app is.
+mkdir -p "$app/Contents/Library/LaunchAgents"
+cat > "$app/Contents/Library/LaunchAgents/local.micro-bridge.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.micro-bridge</string>
+  <key>BundleProgram</key><string>Contents/MacOS/micro</string>
+  <key>ProgramArguments</key>
+  <array><string>micro</string><string>daemon</string><string>--log</string></array>
+  <key>AssociatedBundleIdentifiers</key><string>local.micro-bridge</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>
+PLIST
+# The icon is drawn by the app itself. A Mac that cannot draw it (no display session) gets the
+# plain icon and everything else still works.
+icons=$(mktemp -d)/AppIcon.iconset
+mkdir -p "$icons"
+if .build/release/micro icon "$icons/icon_512x512@2x.png" 2>/dev/null; then
+	for size in 16 32 128 256 512; do
+		sips -z "$size" "$size" "$icons/icon_512x512@2x.png" --out "$icons/icon_${size}x${size}.png" >/dev/null
+		[ "$size" = 512 ] || sips -z "$((size * 2))" "$((size * 2))" "$icons/icon_512x512@2x.png" \
+			--out "$icons/icon_${size}x${size}@2x.png" >/dev/null
+	done
+	mkdir -p "$app/Contents/Resources"
+	iconutil -c icns "$icons" -o "$app/Contents/Resources/AppIcon.icns" 2>/dev/null || rm -rf "$app/Contents/Resources"
+fi
+rm -rf "$(dirname "$icons")"
+# MicroBridge Helper (D-027), carried inside the app; scripts/helper copies it out as root.
+helper="$app/Contents/Library/Helpers/MicroBridge Helper.app"
+mkdir -p "$helper/Contents/MacOS"
+cp .build/release/micro-helper "$helper/Contents/MacOS/micro-helper"
+cat > "$helper/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>local.micro-bridge.helper</string>
+  <key>CFBundleName</key><string>MicroBridge Helper</string>
+  <key>CFBundleExecutable</key><string>micro-helper</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>$version</string>
+  <key>CFBundleShortVersionString</key><string>$version</string>
+  <key>LSBackgroundOnly</key><true/>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+</dict>
+</plist>
+PLIST
+mkdir -p "$app/Contents/Resources"
+cp scripts/helper "$app/Contents/Resources/helper"
+# A stable identity (scripts/make-cert) keeps the Input Monitoring grant across rebuilds.
+# The helper is signed first: the app's signature covers it.
+identity="MicroBridge Local Signing"
+security find-identity -p codesigning | grep -q "$identity" || identity=-
+codesign --force --sign "$identity" --identifier local.micro-bridge.helper "$helper" 2>/dev/null
+codesign --force --sign "$identity" --identifier local.micro-bridge "$app" 2>/dev/null
+echo "$app"

@@ -1,0 +1,64 @@
+#!/bin/sh
+# Builds the download, dist/MicroBridge-<VERSION>.zip, and prints its SHA-256.
+#   scripts/release
+#       A test zip, signed with the local identity. Other Macs refuse to open it.
+#   scripts/release --identity "Developer ID Application: <name> (<team>)" --notary-profile <profile>
+#       Signed for others, notarized by Apple and stapled, from a clean commit.
+# Save the notary profile once: xcrun notarytool store-credentials <profile>
+# It publishes nothing: attach the zip to a GitHub release yourself.
+set -eu
+cd "$(dirname "$0")/.."
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+identity=
+profile=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--identity) [ $# -ge 2 ] || usage; identity=$2; shift 2 ;;
+	--notary-profile) [ $# -ge 2 ] || usage; profile=$2; shift 2 ;;
+	*) usage ;;
+	esac
+done
+case "$identity:$profile" in
+?*:) echo "--identity needs --notary-profile too" >&2; exit 2 ;;
+:?*) echo "--notary-profile needs --identity too" >&2; exit 2 ;;
+esac
+if [ -n "$identity" ] && [ -n "$(git status --porcelain)" ]; then
+	echo "commit your changes first: a release is built from a commit" >&2
+	exit 2
+fi
+
+version=$(cat VERSION)
+scripts/bundle >/dev/null
+# Sign a copy, so the app scripts/micro and scripts/install use is left as it was.
+stage=.build/release-stage
+rm -rf "$stage"
+mkdir -p "$stage" dist
+cp -R .build/MicroBridge.app "$stage/"
+app="$stage/MicroBridge.app"
+helper="$app/Contents/Library/Helpers/MicroBridge Helper.app"
+zip="dist/MicroBridge-$version.zip"
+rm -f "$zip"
+
+# The hardened runtime is what notarization asks for. The test zip has it too, so trying the
+# test zip tries what people will download. The bridge needs no entitlements.
+if [ -n "$identity" ]; then
+	codesign --force --options runtime --timestamp --sign "$identity" --identifier local.micro-bridge.helper "$helper"
+	codesign --force --options runtime --timestamp --sign "$identity" --identifier local.micro-bridge "$app"
+	codesign --verify --strict --verbose=2 "$app"
+	ditto -c -k --keepParent "$app" "$zip"
+	xcrun notarytool submit "$zip" --keychain-profile "$profile" --wait
+	xcrun stapler staple "$app"
+	rm -f "$zip"
+	ditto -c -k --keepParent "$app" "$zip"
+	spctl --assess --type execute --verbose=2 "$app"
+	echo "release $version: signed by $identity, notarized and stapled"
+else
+	signer="MicroBridge Local Signing"
+	security find-identity -p codesigning | grep -q "$signer" || signer=-
+	codesign --force --options runtime --sign "$signer" --identifier local.micro-bridge.helper "$helper"
+	codesign --force --options runtime --sign "$signer" --identifier local.micro-bridge "$app"
+	codesign --verify --strict "$app"
+	ditto -c -k --keepParent "$app" "$zip"
+	echo "test build $version: signed with \"$signer\", not notarized. Other Macs will refuse to open it."
+fi
+shasum -a 256 "$zip"

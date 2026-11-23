@@ -1,0 +1,27 @@
+name: An idea
+description: Something you would like a key, the dial, the stick or the window to do.
+labels: [idea]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What you would like to happen
+      description: The control, what you do with it, and what should happen.
+      placeholder: Holding the wide key could start dictation in a terminal too.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What you are doing when you want it, and how you do it today.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - The Claude app
+        - A terminal
+        - The MicroBridge window
+        - Any app

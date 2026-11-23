@@ -1,0 +1,46 @@
+#!/bin/sh
+# Installs MicroBridge.app to ~/Applications and starts the daemon at login (a LaunchAgent).
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+label=local.micro-bridge
+app="$HOME/Applications/MicroBridge.app"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+log="$HOME/Library/Logs/micro-bridge.log"
+
+"$root/scripts/bundle" >/dev/null
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+# bootout returns before the old daemon is gone; bootstrap fails with "Input/output error" until it is.
+tries=0
+while launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+    /bin/sleep 0.2
+    tries=$((tries + 1))
+done
+mkdir -p "$HOME/Applications" "$HOME/Library/LaunchAgents"
+rm -rf "$app"
+cp -R "$root/.build/MicroBridge.app" "$app"
+
+cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key>
+  <array><string>$app/Contents/MacOS/micro</string><string>daemon</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>StandardOutPath</key><string>$log</string>
+  <key>StandardErrorPath</key><string>$log</string>
+</dict>
+</plist>
+PLIST
+"$app/Contents/MacOS/micro" config init
+launchctl bootstrap "gui/$(id -u)" "$plist"
+# A window opened before this install still runs the old program.
+if pgrep -f "/MicroBridge.app/Contents/MacOS/micro$" >/dev/null; then
+	echo "The MicroBridge window is still the old version: quit it (Cmd-Q) and open it again."
+fi
+echo "installed: $app"
+echo "log: $log"

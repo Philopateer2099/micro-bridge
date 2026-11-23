@@ -1,0 +1,40 @@
+#!/bin/sh
+# Makes the public repository's first commit: the files of the last commit here, as one commit
+# with no history. The private history keeps the author's personal email and a real session id,
+# so the public repository starts fresh (D-016, D-017).
+#   scripts/public-snapshot <new folder> "Name <id+login@users.noreply.github.com>"
+# It publishes nothing. Push the new folder yourself once you have read it.
+set -eu
+if [ $# != 2 ]; then
+	sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+	exit 2
+fi
+root=$(cd "$(dirname "$0")/.." && pwd)
+dest=$1
+author=$2
+case "$author" in
+*" <"*"@users.noreply.github.com>") ;;
+*) echo "the author must be a name and a GitHub noreply address, like \"Name <id+login@users.noreply.github.com>\"" >&2; exit 2 ;;
+esac
+[ ! -e "$dest" ] || { echo "$dest already exists" >&2; exit 2; }
+[ -z "$(git -C "$root" status --porcelain)" ] || { echo "commit or stash your changes first: the snapshot is the last commit" >&2; exit 2; }
+
+mkdir -p "$dest"
+git -C "$root" archive HEAD | tar -x -C "$dest"
+"$root/scripts/check-public" "$dest"
+
+name=${author% <*}
+email=${author##*<}
+email=${email%>}
+git -C "$dest" init -q -b main
+git -C "$dest" add -A
+git -C "$dest" -c user.name="$name" -c user.email="$email" commit -q -F - <<MSG
+MicroBridge $(cat "$root/VERSION")
+
+A macOS bridge between the Codex Micro macropad and Claude Code. The
+private history before this commit is summed up in CHANGELOG.md and
+docs/development-log.md.
+MSG
+echo "made $dest: $(git -C "$dest" ls-files | wc -l | tr -d ' ') files in one commit by $author"
+echo "nothing is pushed. To publish: create the empty repository on GitHub, then in $dest run"
+echo "  git remote add origin <its url> && git push -u origin main"
