@@ -424,3 +424,11 @@ Why: Tried in the owner's Orca on 2026-11-23: every chat fired the bridge's hook
 Consequence: Orca's layer gets working, needs-you and done from the same hook as Claude's layer, at once and without an Orca plugin or polling. The end of the session tells the bridge the tab closed. Until step 3 is built, Orca chats still take Claude's keys. Other agents in Orca's chat (Codex and the rest) report nothing this way.
 Rejected: Reading the state word in the tab's name: only tabs on screen have one. Polling orca agent list for the state: slower, and a second source to keep in step with the hook.
 By: claude
+
+## D-054 (2026-11-23): A dim key ignores taps, and a hold frees it
+
+Decision: When the chat on a key of Orca's layer is closed, the key keeps it and goes dim. A tap on a dim key does nothing. A hold frees the key, as on any taken key. This replaces the tap of D-045; the rest of D-045 stands.
+Why: Orca has no way to reopen a closed chat as a chat. Tried on 2026-11-23 in the owner's Orca: the command line, the new-tab menu, the search and the menu bar offer none, and the plugin method agent.resume opens a terminal with the Claude command or refuses.
+Consequence: A dim key only says that its chat was closed. To use the key again the owner holds it to free it and puts another chat on it. Nothing is started or opened by a tap on it.
+Rejected: A tap that opens a new chat in the same workspace and puts it on the key: Claude recommended it, and the owner turned it down. Continuing the old conversation in a terminal: the owner uses no terminal agents (D-046).
+By: owner
