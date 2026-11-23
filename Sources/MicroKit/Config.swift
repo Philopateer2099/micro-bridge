@@ -64,6 +64,8 @@ public enum KeyPhase: String, Sendable {
 ///     scroll:down           stick it scrolls while pushed, faster the farther; on a key, one step
 ///     pane:left             move the pointer to the next part of the front window that scrolls on
 ///     pane:right            its own (the chat, a web page, the sidebar), so the stick scrolls it
+///     pane:chat             move the pointer onto the chat of the Claude app's window, once the
+///                           session `jump` shows is on screen, so the stick scrolls the chat
 ///     key:shift+tab        type a key combination into the app in front
 ///     keydown:space         press and keep holding (pair with keyup: on release)
 ///     keyup:space
@@ -100,6 +102,9 @@ public enum Action: Sendable, Equatable, CustomStringConvertible {
     /// Moves the pointer to the next pane that way in the front window: a part that scrolls on
     /// its own, such as the chat, a web page or the sidebar. Scrolling goes where the pointer is.
     case pane(left: Bool)
+    /// Moves the pointer onto the chat: the pane above the Claude app's message box. After
+    /// `jump`, it waits for the session to show first. It leaves a pointer the user has moved.
+    case pointerToChat
     case key(KeyCombo, KeyPhase, spelling: String)
     case text(String)
     case shell(String)
@@ -143,6 +148,7 @@ public enum Action: Sendable, Equatable, CustomStringConvertible {
             switch trimmed.lowercased() {
             case "left": return .pane(left: true)
             case "right": return .pane(left: false)
+            case "chat": return .pointerToChat
             default: return nil
             }
         case "key", "keydown", "keyup":
@@ -175,7 +181,7 @@ public enum Action: Sendable, Equatable, CustomStringConvertible {
     /// True for actions that type into or click in other apps, which macOS gates behind Accessibility.
     public var typesKeys: Bool {
         switch self {
-        case .key, .text, .click, .choose, .complete, .lock, .scroll, .pane: true
+        case .key, .text, .click, .choose, .complete, .lock, .scroll, .pane, .pointerToChat: true
         default: false
         }
     }
@@ -191,6 +197,7 @@ public enum Action: Sendable, Equatable, CustomStringConvertible {
         case .lock: "lock"
         case let .scroll(up): up ? "scroll:up" : "scroll:down"
         case let .pane(left): left ? "pane:left" : "pane:right"
+        case .pointerToChat: "pane:chat"
         case let .key(_, phase, spelling): (phase == .tap ? "key:" : phase == .down ? "keydown:" : "keyup:") + spelling
         case let .text(text): "text:" + text.replacingOccurrences(of: "\n", with: "\\n")
         case let .shell(command): "sh:" + command
@@ -319,7 +326,7 @@ public struct Config: Sendable, Equatable {
         "terminal": ["com.apple.Terminal", "com.mitchellh.ghostty", "com.googlecode.iterm2"]
       },
       "agentKeys": {
-        "press": ["ack", "jump"],
+        "press": ["ack", "jump", "pane:chat"],
         "hold": "forget"
       },
       "keys": {

@@ -39,7 +39,8 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   Return and Esc.
 - **The dial** moves between a question card's answers and ticks or submits them, card by card.
 - **The stick** can scroll what is under the pointer, faster the farther it is pushed, and move
-  the pointer between panes, such as the chat and a web page beside it.
+  the pointer between panes, such as the chat and a web page beside it. A tap on an Agent Key
+  puts the pointer on that session's chat, so the stick scrolls it at once.
 - **Fork, Fast, Send and Mic** (hold to talk), in the Claude app and in a terminal.
 - **Send with nothing typed** takes the grey suggestion in the Claude app's message box and
   sends it, as Tab then Return would. With text typed, or no suggestion, it is a plain Return.

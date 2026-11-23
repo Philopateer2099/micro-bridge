@@ -39,7 +39,7 @@ import Testing
             "cmd:APPR", "key:cmd+shift+m", "keydown:space", "keyup:space", "text:/fast\n", "text:Use computer use to ",
             "click:epitaxy-approval-card/=Next!", "choose:epitaxy-approval-card/epitaxy-answer-option+Next|Submit/next",
             "sh:open -t \"$HOME/notes.txt\"", "open:https://code.claude.com/docs", "ack", "jump", "focus", "forget", "pin", "lock",
-            "scroll:up", "scroll:down", "pane:left", "pane:right",
+            "scroll:up", "scroll:down", "pane:left", "pane:right", "pane:chat",
         ]
         for spelling in spellings {
             let draft = ActionDraft(spelling: spelling)
@@ -148,7 +148,7 @@ import Testing
         #expect(pinned)
         #expect(try onDisk(model).contains(#"""
           "agentKeys": {
-            "press": ["ack", "jump"],
+            "press": ["ack", "jump", "pane:chat"],
             "hold": "forget",
             "doubleTap": "pin"
           },

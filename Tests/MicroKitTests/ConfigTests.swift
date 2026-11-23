@@ -127,7 +127,7 @@ import Testing
 
     @Test func builtInDefaults() {
         let config = Config.builtIn
-        #expect(names(config, "AG", "press") == ["ack", "jump"])
+        #expect(names(config, "AG", "press") == ["ack", "jump", "pane:chat"])
         #expect(names(config, "AG", "doubleTap") == [])
         #expect(names(config, "ACT06", "press") == ["text:/fast\\n"])
         #expect(names(config, "ACT07", "press") == ["key:return"])
@@ -616,10 +616,70 @@ import Testing
         #expect(Panes.spot(in: chat) == CGPoint(x: 650, y: 500))
     }
 
+    @Test func widerCopiesOfAWebPageDoNotHoldThePointer() {
+        // The Claude app's window on 2026-11-22, after its side pane was made narrower twice: two
+        // hidden browser tabs kept their old widths under the one on show and reached under the
+        // chat. pane:left from the web page went to a wider copy, whose middle is in the same
+        // web page, every time.
+        let sidebar = CGRect(x: 1453, y: 1165, width: 328, height: 1191)
+        let chat = CGRect(x: 1792, y: 1106, width: 1034, height: 1307)
+        let widest = CGRect(x: 2428, y: 1225, width: 1501, height: 1186)
+        let wider = CGRect(x: 2624, y: 1225, width: 1305, height: 1186)
+        let web = CGRect(x: 2835, y: 1225, width: 1094, height: 1186)
+        let panes = [sidebar, chat, widest, wider, web]
+        #expect(Panes.merged(panes) == [sidebar, chat, web])
+        #expect(Panes.next(from: Panes.spot(in: web), in: panes, left: true) == chat)
+        #expect(Panes.next(from: Panes.spot(in: web), in: panes, left: false) == nil)
+        #expect(Panes.next(from: Panes.spot(in: chat), in: panes, left: false) == web)
+        // Made wider instead: the tab on show is the wide one. The part both cover is inside it.
+        let shown = CGRect(x: 2428, y: 1225, width: 1501, height: 1186)
+        let hidden = CGRect(x: 2835, y: 1225, width: 1094, height: 1186)
+        let narrowChat = CGRect(x: 1792, y: 1106, width: 628, height: 1307)
+        let wide = [sidebar, narrowChat, hidden, shown]
+        let landed = Panes.next(from: Panes.spot(in: narrowChat), in: wide, left: false)
+        #expect(landed.map { shown.contains(Panes.spot(in: $0)) } == true)
+        #expect(Panes.next(from: Panes.spot(in: landed ?? .zero), in: wide, left: true) == narrowChat)
+        // Moved and made wider again: a copy that shares no edge with the tab on show, so it is
+        // not merged. A move whose landing spot is in the pane the pointer is in is no move.
+        let stale = CGRect(x: 2624, y: 1225, width: 1305, height: 1186)
+        let onShow = CGRect(x: 2647, y: 1225, width: 1341, height: 1186)
+        let chatNow = CGRect(x: 1792, y: 1106, width: 846, height: 1296)
+        let now = [sidebar, chatNow, stale, onShow]
+        #expect(Panes.merged(now).count == 4)
+        #expect(Panes.next(from: Panes.spot(in: onShow), in: now, left: true) == chatNow)
+        #expect(Panes.next(from: Panes.spot(in: onShow), in: now, left: false) == nil)
+        let under = CGRect(x: 2500, y: 1225, width: 1429, height: 1186)
+        #expect(Panes.next(from: Panes.spot(in: onShow), in: [sidebar, chatNow, under, onShow], left: true) == chatNow)
+        // Side by side or stacked, panes are not copies.
+        #expect(Panes.merged([sidebar, chat]) == [sidebar, chat])
+        let top = CGRect(x: 1000, y: 0, width: 400, height: 500)
+        let bottom = CGRect(x: 1000, y: 500, width: 400, height: 500)
+        #expect(Panes.merged([top, bottom]) == [top, bottom])
+    }
+
+    @Test func theChatIsThePaneAboveTheMessageBox() {
+        let sidebar = CGRect(x: 0, y: 0, width: 300, height: 1000)
+        let chat = CGRect(x: 300, y: 0, width: 700, height: 850)
+        let web = CGRect(x: 1000, y: 0, width: 600, height: 1000)
+        let box = CGRect(x: 350, y: 870, width: 600, height: 100)
+        #expect(Panes.chat(in: [web, sidebar, chat], above: box) == chat)
+        // A hidden wider copy of the web page reaching under the box's middle is not the chat.
+        let copy = CGRect(x: 500, y: 0, width: 1100, height: 1000)
+        #expect(Panes.chat(in: [web, sidebar, chat, copy], above: box) == chat)
+        #expect(Panes.chat(in: [web, sidebar], above: box) == nil)
+    }
+
     @Test func paneGoesLeftOrRight() {
         #expect(Action.parse("pane:left") == .pane(left: true))
         #expect(Action.parse("pane: Right") == .pane(left: false))
         #expect(Action.parse("pane:up") == nil && Action.parse("pane") == nil)
+        #expect(Action.parse("pane: Chat") == .pointerToChat)
+        #expect(Action.pointerToChat.description == "pane:chat")
+        #expect(Action.pointerToChat.plainWords == "Move the pointer onto the chat, once the session shows")
+        #expect(Action.pointerToChat.typesKeys)
+        // An Agent Key's tap shows its session and puts the pointer on its chat, so the stick
+        // scrolls the chat at once.
+        #expect(Config.builtIn.bindings["AG.press"] == [.ack, .jump, .pointerToChat])
         #expect(Action.pane(left: false).description == "pane:right")
         #expect(Action.pane(left: true).plainWords == "Move the pointer to the pane on the left")
         // It moves the pointer, which macOS gates behind Accessibility like typing.

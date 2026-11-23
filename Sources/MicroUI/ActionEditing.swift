@@ -88,7 +88,7 @@ enum ActionKind: String, CaseIterable, Identifiable, Sendable {
         case .click: "Write the box, a slash, then the button, such as epitaxy-approval-card/Allow once."
         case .choose: "Write the box, the options' class, then next, prev or mark, such as card/option/next."
         case .scroll: "Write up or down."
-        case .pane: "Write left or right."
+        case .pane: "Write left, right or chat."
         case .shell: "Write the command to run."
         case .open: "Write a link, or the path of a file or an app."
         default: ""

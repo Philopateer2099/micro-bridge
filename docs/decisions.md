@@ -304,3 +304,19 @@ Why: The owner picked it on 2026-11-22 when asked which of the two to use. The p
 Consequence: A folder that commits to the public repo sets user.name and user.email for itself before its first commit. The Mac-wide git name and email are not used there.
 Rejected: The name in the Mac's git settings.
 By: owner
+
+## D-039 (2026-11-22): Copies of a pane count as one, and a pane move must leave the pane
+
+Decision: Panes.next merges panes with the same top, bottom and left or right edge into the part they all cover, and skips any pane whose middle lies inside the pane the pointer is in. The pane walk goes into elements that scroll but are smaller than a pane.
+Why: The Claude app's side pane reports hidden browser tabs at the widths the pane had before it was resized. pane:left from the web page went to a wider copy whose middle is in the same page, so the pointer never left it and the stick kept scrolling the page. A later layout had a copy that shared no edge, so merging alone was not enough.
+Consequence: From a web page in the side pane, one push left reaches the chat. A pane hidden under another can still be a stop when its middle shows outside the pane the pointer is in. The message box, inside a small scrolling element, is now found by the walk.
+Rejected: Asking accessibility which element is under each pane's middle (a hit test per pane, slower, and unproven on Electron web views). Taking the smallest pane at each point as the one on show (wrong when the pane on show is the wider one).
+By: claude
+
+## D-040 (2026-11-22): A tap on an Agent Key puts the pointer on the chat
+
+Decision: A new action, pane:chat, moves the pointer to the middle of the Claude app's chat, the pane right above the box named Prompt. After jump it waits up to 3 s for that session to show. The Agent Keys' tap is now ack, jump, pane:chat.
+Why: The owner asked that switching to a chat leave the pointer on it, so pushing the stick up scrolls the chat without a push right first. The Claude app scrolls only what is under the pointer.
+Consequence: A tap moves the pointer when it is off the chat. It stays when it is on the chat already, when the user moved it since the press, and for a session in a terminal. A config with its own agentKeys press keeps it; the owner's got pane:chat added by hand.
+Rejected: Moving the pointer inside jump itself (no way to turn it off). Picking the largest pane as the chat (a wide web page would win).
+By: claude

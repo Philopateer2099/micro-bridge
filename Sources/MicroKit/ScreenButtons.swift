@@ -778,41 +778,76 @@ public enum ScreenButtons {
     /// top left and cut to the window: a native scroll area, a web page inside the window, or a
     /// web element made to scroll. Smaller than `smallestPane` either way, it does not count.
     public static func panes(bundleID: String, maxSeconds: Double = 0.5) -> [CGRect] {
+        layout(bundleID: bundleID, box: nil, maxSeconds: maxSeconds).panes
+    }
+
+    /// The panes of an app's front window, as `panes` finds them, and where the text box named
+    /// `box` (its label, id or one of its classes) is, when the walk passes one.
+    public static func layout(bundleID: String, box: String?, maxSeconds: Double = 0.5) -> (panes: [CGRect], box: CGRect?) {
+        guard case let .success(window) = open(bundleID),
+              let whole = rect(attribute(window.root, kAXPositionAttribute), attribute(window.root, kAXSizeAttribute))
+        else { return ([], nil) }
+        var pass = Pass(detail: false, maxNodes: 5000, deadline: Date().addingTimeInterval(maxSeconds))
+        var walk = PaneWalk(window: whole, box: box.map { ButtonRule(box: $0, pick: .first) })
+        gatherPanes(window.root, pass: &pass, into: &walk)
+        return (walk.found, walk.boxFrame)
+    }
+
+    /// For `micro panes`: what each pane is, as its role, id and classes.
+    public static func paneNames(bundleID: String) -> [(CGRect, String)] {
         guard case let .success(window) = open(bundleID),
               let whole = rect(attribute(window.root, kAXPositionAttribute), attribute(window.root, kAXSizeAttribute))
         else { return [] }
-        var pass = Pass(detail: false, maxNodes: 5000, deadline: Date().addingTimeInterval(maxSeconds))
+        var pass = Pass(detail: false, maxNodes: 5000, deadline: Date().addingTimeInterval(0.5))
+        var walk = PaneWalk(window: whole, box: nil)
+        gatherPanes(window.root, pass: &pass, into: &walk)
+        return Array(zip(walk.found, walk.names))
+    }
+
+    private struct PaneWalk {
+        let window: CGRect
+        let box: ButtonRule?
         var found: [CGRect] = []
-        gatherPanes(window.root, window: whole, pass: &pass, into: &found)
-        return found
+        var names: [String] = []
+        var boxFrame: CGRect?
     }
 
     public static let smallestPane = 150.0
 
-    private static let paneFacts = [kAXRoleAttribute, kAXChildrenAttribute, "AXDOMClassList", kAXPositionAttribute, kAXSizeAttribute]
+    private static let paneFacts = [kAXRoleAttribute, kAXChildrenAttribute, "AXDOMClassList", kAXPositionAttribute, kAXSizeAttribute,
+                                    kAXTitleAttribute, kAXDescriptionAttribute, "AXDOMIdentifier"]
     /// The classes that make a web element scroll up and down, as Tailwind names them.
     private static let scrollClasses: Set<String> = ["overflow-y-auto", "overflow-auto", "overflow-y-scroll", "overflow-scroll"]
 
     /// Stops at each pane: what is inside one, such as a long chat, can be very large.
-    private static func gatherPanes(_ element: AXUIElement, window: CGRect, pass: inout Pass, into found: inout [CGRect]) {
+    private static func gatherPanes(_ element: AXUIElement, pass: inout Pass, into walk: inout PaneWalk) {
         guard pass.mayVisit() else { return }
         var raw: CFArray?
         guard AXUIElementCopyMultipleAttributeValues(element, paneFacts as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &raw) == .success,
               let values = raw as? [AnyObject], values.count == paneFacts.count else { return }
+        let window = walk.window
         let frame = rect(values[3], values[4])?.intersection(window)
-        let scrolls = switch values[0] as? String ?? "" {
+        let role = values[0] as? String ?? ""
+        let classes = values[2] as? [String] ?? []
+        if let box = walk.box, walk.boxFrame == nil, role == kAXTextAreaRole || role == kAXTextFieldRole {
+            let named = { (index: Int) in (values[index] as? String).flatMap { $0.isEmpty ? nil : $0 } }
+            if box.isBox(id: named(7), label: named(5) ?? named(6), classes: classes) { walk.boxFrame = frame }
+        }
+        let scrolls = switch role {
         case kAXScrollAreaRole, "AXWebArea": true
-        default: !scrollClasses.isDisjoint(with: values[2] as? [String] ?? [])
+        default: !scrollClasses.isDisjoint(with: classes)
         }
         // What fills the window is its frame, not a pane: an Electron app's whole window is one
         // web page in one scroll area, with its panes inside.
         let fills = frame.map { $0.width * $0.height >= window.width * window.height * 0.9 } ?? false
-        if scrolls, !fills {
-            if let frame, frame.width >= smallestPane, frame.height >= smallestPane { found.append(frame) }
+        // One too small to be a pane is walked into: the Claude app's message box is inside one.
+        if scrolls, !fills, let frame, frame.width >= smallestPane, frame.height >= smallestPane {
+            walk.found.append(frame)
+            walk.names.append("\(role) id=\(values[7] as? String ?? "") classes=\(classes.joined(separator: " "))")
             return
         }
         for child in values[1] as? [AnyObject] ?? [] {
-            gatherPanes(child as! AXUIElement, window: window, pass: &pass, into: &found)
+            gatherPanes(child as! AXUIElement, pass: &pass, into: &walk)
         }
     }
 

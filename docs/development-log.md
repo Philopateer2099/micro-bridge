@@ -862,6 +862,35 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The stick leaves a web page, and a tap puts the pointer on the chat (2026-11-23 00:45 UTC), works on the pad
+
+The owner found the stick stuck in a web page in the Claude app's side pane: pushed left, the
+pointer stayed there, so the stick went on scrolling the page. They also asked for a tap on an
+Agent Key to put the pointer on the chat, so the stick scrolls the chat without a push right
+first (D-039, D-040).
+
+- Cause, from the log at 2026-11-22 23:57 UTC and `micro panes`: the side pane reported its web
+  page three times. Two hidden browser tabs kept the widths the pane had before it was made
+  narrower (x 2428…3929 and 2624…3929), under the tab on show (2835…3929). `pane:left` picked
+  the nearest pane by its middle, a wider copy, and that middle lies inside the web page. Every
+  push landed on the same spot.
+- Fixed: copies of one pane (same top and bottom, same left or right edge) count as one, the
+  part they all cover. A move whose landing spot is inside the pane the pointer is in is no
+  move. The second rule covers a later layout whose copy shared no edge with the tab on show.
+- Built: `pane:chat` puts the pointer in the middle of the chat, the pane right above the box
+  named Prompt. After `jump` it waits up to 3 s for the session to show. The pointer stays when
+  it is on the chat already, when it was moved since the press, and for a session in a terminal.
+  The Agent Keys' tap is now `["ack", "jump", "pane:chat"]`. The owner's config got it by hand,
+  with their yes.
+- The message box was not found at first: it sits inside an element that scrolls but is smaller
+  than a pane, and the walk stopped at every element that scrolls. Small ones are walked into.
+- `micro panes` marks the chat and says how many hidden copies it left out; `--names` prints each
+  pane's role and classes.
+- On the owner's pad: at 00:42:31 UTC one push left took the pointer from the web page to the
+  chat, and the stick scrolled the chat. At 00:44:46 and 00:44:52 UTC taps on keys 4 and 6 put
+  the pointer on the chat (in 23 and 65 ms), and the stick scrolled it.
+- 276 tests pass (2 new). Not seen yet: the 3 s wait running out.
+
 ### One tap passes the pad (2026-11-22 23:45 UTC), works on the pad
 
 The owner tried the two taps and wanted one, and asked whether the touch sensor itself can be
