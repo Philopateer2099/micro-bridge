@@ -92,6 +92,11 @@ public enum MicroApp {
                   RootView(model: made, state: WindowState(tab: .commands, command: "NOTES")))
         try write("commands-mic", dark: false,
                   RootView(model: BridgeModel(demo: true), state: WindowState(tab: .commands, command: "MIC")))
+        // Orca has a layer of its own, and the pad is on it.
+        let orca = BridgeModel(demo: true)
+        orca.showOrca(padThere: true)
+        try write("pad-orca", dark: true, screen(.pad, model: orca))
+        try write("behavior-orca", dark: true, screen(.behavior, model: orca))
         let stopped = BridgeModel(demo: true)
         stopped.showStopped()
         try write("setup-stopped", dark: true, screen(.setup, model: stopped))

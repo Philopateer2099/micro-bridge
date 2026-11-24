@@ -62,6 +62,8 @@ struct PadDrawing: View {
     var pulsing: Set<Int> = []
     /// The Agent Keys whose sessions are pinned.
     var pinned: Set<Int> = []
+    /// The Agent Keys whose light is dim: on Orca's layer, a key whose chat is closed.
+    var dim: Set<Int> = []
     var color: (AgentStatus) -> Color
     /// What to print on each of the lower keys, by the key's name in the file.
     var faces: [String: KeyFace] = [:]
@@ -124,11 +126,14 @@ struct PadDrawing: View {
 
     private func agent(_ slot: Int) -> some View {
         let status = slots.indices.contains(slot) ? slots[slot] : .off
-        let says = showsLights ? "Agent Key \(slot + 1): \(status.label)" + (pinned.contains(slot) ? ", pinned" : "") : "Agent Key \(slot + 1)"
+        let says = showsLights
+            ? "Agent Key \(slot + 1): \(status.label)" + (pinned.contains(slot) ? ", pinned" : "") + (dim.contains(slot) ? ", closed" : "")
+            : "Agent Key \(slot + 1)"
         return Button {
             tapped(.agents, slot)
         } label: {
-            AgentCap(light: status == .off ? nil : color(status), label: "\(slot + 1)", pulsing: pulsing.contains(slot),
+            AgentCap(light: status == .off ? nil : color(status).opacity(dim.contains(slot) ? 0.3 : 1),
+                     label: "\(slot + 1)", pulsing: pulsing.contains(slot),
                      pinned: pinned.contains(slot), plain: !showsLights, unit: unit)
                 .overlay(ring(RoundedRectangle(cornerRadius: unit * 0.22, style: .continuous), on: selection == .agents))
         }

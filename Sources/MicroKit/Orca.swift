@@ -143,6 +143,20 @@ public enum Orca {
             .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    /// The variables that send Orca's command to an Orca on another machine.
+    static let elsewhere = ["ORCA_ENVIRONMENT", "ORCA_PAIRING_CODE"]
+
+    /// The environment Orca's command runs in. It is this machine's Orca the bridge reads and
+    /// drives, wherever the bridge was started from: the tabs it reads and the hook that
+    /// reports are both on this machine.
+    static func environment(from own: [String: String]) -> [String: String] {
+        var environment = own.filter { !elsewhere.contains($0.key) }
+        // launchd starts the daemon with a bare PATH, and the command is a script.
+        environment["PATH"] = ["/usr/local/bin", "/opt/homebrew/bin", own["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"]
+            .joined(separator: ":")
+        return environment
+    }
+
     /// Runs Orca's command and returns what it printed, also when it ended with an error:
     /// with `--json` the error is in the answer. Waits at most `seconds`.
     static func run(_ arguments: [String], seconds: Double = 5) -> Result<String, Problem> {
@@ -150,11 +164,7 @@ public enum Orca {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: command)
         process.arguments = arguments
-        var environment = ProcessInfo.processInfo.environment
-        // launchd starts the daemon with a bare PATH, and the command is a script.
-        environment["PATH"] = ["/usr/local/bin", "/opt/homebrew/bin", environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"]
-            .joined(separator: ":")
-        process.environment = environment
+        process.environment = environment(from: ProcessInfo.processInfo.environment)
         process.currentDirectoryURL = URL(fileURLWithPath: NSHomeDirectory())
         let out = Pipe()
         process.standardOutput = out

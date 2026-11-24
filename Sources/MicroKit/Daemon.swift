@@ -38,7 +38,7 @@ struct DaemonWorld {
 public final class Daemon {
     private var state = BridgeState()
     /// The chats on the keys of Orca's layer, put there by hand.
-    private var orca = OrcaKeys()
+    private(set) var orca = OrcaKeys()
     /// Said once: a chat in Orca reported while no layer is Orca's.
     private var saidNoOrcaLayer = false
     private var config = Config.builtIn
@@ -235,6 +235,8 @@ public final class Daemon {
         case .orcaTake, .orcaFree, .orcaShow:
             orcaCommand(command) { problem in client.send(problem.map(Reply.error) ?? Reply.ok) }
             flush()
+        case .orcaChats:
+            orcaChats { client.send($0) }
         case let .pin(id, _), let .unpin(id):
             guard state.sessions[id] != nil else {
                 client.send(Reply.error("no session \"\(id)\""))
@@ -1143,6 +1145,20 @@ public final class Daemon {
         }
     }
 
+    /// Orca's open Claude chats, as the answer to `orca.chats`, for the window and the panel
+    /// to choose from. Titles pass through: they are kept in memory for the chats on keys, and
+    /// never in the log or on file.
+    func orcaChats(done: @escaping @MainActor (String) -> Void) {
+        world.orca.chats { [weak self] result in
+            switch result {
+            case let .success(chats):
+                self?.orca.learn(titles: Dictionary(chats.map { ($0.id, $0.title) }) { first, _ in first })
+                done(Reply.orcaChats(chats))
+            case let .failure(problem): done(Reply.error(problem.text))
+            }
+        }
+    }
+
     /// A key of Orca's layer by socket command: `orca.take` as a hold on an empty key,
     /// `orca.free` as a hold on a taken one, `orca.show` as a tap's jump. `done` hears nil, or
     /// why it did not happen.
@@ -1238,7 +1254,9 @@ public final class Daemon {
     /// Nil when the key holds the chat now, or why it does not.
     private func put(_ chat: OrcaChat, on slot: Int) -> String? {
         if let other = orca.chats[chat.id]?.slot { return "that chat is on key \(other + 1) already" }
-        guard orca.take(slot: slot, chat: chat.id, status: chat.status) else { return "key \(slot + 1) holds a chat already" }
+        guard orca.take(slot: slot, chat: chat.id, status: chat.status, title: chat.title) else {
+            return "key \(slot + 1) holds a chat already"
+        }
         lightsChanged()
         saveOrcaKeys()
         return nil

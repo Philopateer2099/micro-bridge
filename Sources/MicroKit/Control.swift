@@ -15,6 +15,7 @@ import Foundation
 ///     {"op":"orca.take","slot":2,"session":"…"}  → {"ok":true}        (the key takes that chat, by Orca's session ID)
 ///     {"op":"orca.free","slot":2}                → {"ok":true}
 ///     {"op":"orca.show","slot":2}                → {"ok":true}        (as a tap on that key of Orca's layer)
+///     {"op":"orca.chats"}                        → {"ok":true,"chats":[{"session":"…","title":"…","status":"done","worktree":"…"}]}
 ///
 /// `report` is how agents show up: the daemon gives each session its own Agent Key. It may
 /// carry `"host":"claude:local_…"`, which is where a jump goes. With `"host":"orca:<id>"` the
@@ -39,6 +40,8 @@ public enum Command: Sendable, Equatable {
     case orcaFree(slot: Int)
     /// As a tap on that key of Orca's layer: its chat comes on screen.
     case orcaShow(slot: Int)
+    /// Asks which Claude chats are open in Orca, for the screens that put them on keys.
+    case orcaChats
 
     public struct Invalid: Error, Equatable, CustomStringConvertible {
         public let description: String
@@ -98,6 +101,7 @@ public enum Command: Sendable, Equatable {
         case "clear": return .clear
         case "state": return .state
         case "subscribe": return .subscribe
+        case "orca.chats": return .orcaChats
         case "orca.take", "orca.free", "orca.show":
             guard let slot = value["slot"]?.int, (0 ..< BridgeState.slotCount).contains(slot) else {
                 throw Invalid(description: "\"slot\" must be 0 to \(BridgeState.slotCount - 1)")
@@ -293,7 +297,7 @@ public struct BridgeState: Sendable, Equatable {
             slots = [AgentStatus](repeating: .off, count: Self.slotCount)
             sessions = [:]
             reserved = nil
-        case .state, .subscribe, .orcaTake, .orcaFree, .orcaShow: break
+        case .state, .subscribe, .orcaTake, .orcaFree, .orcaShow, .orcaChats: break
         }
         return slots != before
     }
@@ -699,6 +703,17 @@ public struct BridgeState: Sendable, Equatable {
 public enum Reply {
     public static let ok = JSONValue.object([("ok", .bool(true))]).serialized
 
+    /// The answer to "orca.chats": Orca's open Claude chats, by Orca's session ID.
+    public static func orcaChats(_ chats: [OrcaChat]) -> String {
+        JSONValue.object([
+            ("ok", .bool(true)),
+            ("chats", .array(chats.map { chat in
+                .object([("session", .string(chat.id)), ("title", .string(chat.title)),
+                         ("status", .string(chat.status.rawValue)), ("worktree", .string(chat.worktree))])
+            })),
+        ]).serialized
+    }
+
     public static func error(_ message: String) -> String {
         JSONValue.object([("ok", .bool(false)), ("error", .string(message))]).serialized
     }
@@ -762,6 +777,7 @@ public enum Reply {
                     ("slot", .number(Double(slot))), ("session", .string(chat.id)), ("status", .string(chat.status.rawValue)),
                 ]
                 if chat.ended != nil { pairs.append(("closed", .bool(true))) }
+                if let title = orca.keys.titles[chat.id] { pairs.append(("title", .string(title))) }
                 return .object(pairs)
             }
             pairs.append(("orca", .object([

@@ -13,6 +13,9 @@ public struct OrcaKeys: Sendable, Equatable {
     public static let dimBrightness = 0.12
 
     public private(set) var chats: [String: Session] = [:]
+    /// What Orca calls the chats on keys, so a key whose chat is closed can still say which
+    /// chat it was. Kept in memory only: never in the keys file, never in the log.
+    public private(set) var titles: [String: String] = [:]
     private var notes: [String] = []
     private var clock = 0
 
@@ -133,12 +136,14 @@ public struct OrcaKeys: Sendable, Equatable {
     /// Puts a chat on an empty key. `status` is what Orca says the chat is doing, for a chat
     /// that has not reported yet. False when the key is taken, or the chat is on a key already.
     @discardableResult
-    public mutating func take(slot: Int, chat id: String, status: AgentStatus = .idle, at now: Date = Date()) -> Bool {
+    public mutating func take(slot: Int, chat id: String, status: AgentStatus = .idle, title: String? = nil,
+                              at now: Date = Date()) -> Bool {
         guard (0 ..< BridgeState.slotCount).contains(slot), owner(of: slot) == nil else { return false }
         if let other = chats[id]?.slot {
             notes.append("chat \(Self.short(id)) is on key \(other + 1) already")
             return false
         }
+        if let title = title.map(Self.kept), !title.isEmpty { titles[id] = title }
         clock += 1
         var chat = chats[id] ?? Session(id: id, status: status == .off ? .idle : status, slot: nil, pid: nil, cwd: nil, seen: clock)
         chat.host = .orcaChat(id)
@@ -154,8 +159,24 @@ public struct OrcaKeys: Sendable, Equatable {
     public mutating func free(slot: Int) -> Session? {
         guard let chat = owner(of: slot) else { return nil }
         if chat.ended != nil { chats[chat.id] = nil } else { chats[chat.id]?.slot = nil }
+        titles[chat.id] = nil
         notes.append("key \(slot + 1) is free: it held chat \(Self.short(chat.id))")
         return chat
+    }
+
+    /// A title as it is kept: one line, of a length a row can show.
+    private static func kept(_ title: String) -> String {
+        String(title.split(whereSeparator: \.isNewline).joined(separator: " ").prefix(200))
+    }
+
+    /// Orca said what its open chats are called now. True if the title of a chat on a key changed.
+    @discardableResult
+    public mutating func learn(titles heard: [String: String]) -> Bool {
+        let before = titles
+        for chat in chats.values where chat.slot != nil {
+            if let title = heard[chat.id].map(Self.kept), !title.isEmpty { titles[chat.id] = title }
+        }
+        return titles != before
     }
 
     /// A tap on a key marks what its chat finished as seen.

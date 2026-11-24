@@ -297,7 +297,75 @@ struct OrcaTests {
         #expect(!Reply.state(BridgeState(), pad: nil).contains("orca"))
     }
 
+    @Test func theSocketListsOrcasChats() throws {
+        #expect(try Command.parse(#"{"op":"orca.chats"}"#) == .orcaChats)
+        #expect(Reply.orcaChats([Self.chat(Self.one, "Fix the build", .working)])
+            == #"{"ok":true,"chats":[{"session":"\#(Self.one)","title":"Fix the build","status":"working","#
+            + #""worktree":"\#(Self.place)"}]}"#)
+        #expect(Reply.orcaChats([]) == #"{"ok":true,"chats":[]}"#)
+    }
+
+    /// The bridge reads the tabs of this machine's Orca, so its questions go to this machine's
+    /// Orca too, also when the shell it was started from points Orca's command somewhere else.
+    @Test func orcasCommandStaysOnThisMachine() {
+        let environment = Orca.environment(from: [
+            "ORCA_ENVIRONMENT": "another-machine", "ORCA_PAIRING_CODE": "a-code", "HOME": "/Users/x", "PATH": "/usr/bin",
+        ])
+        #expect(environment["ORCA_ENVIRONMENT"] == nil && environment["ORCA_PAIRING_CODE"] == nil)
+        #expect(environment["HOME"] == "/Users/x")
+        #expect(environment["PATH"] == "/usr/local/bin:/opt/homebrew/bin:/usr/bin")
+        #expect(Orca.environment(from: [:])["PATH"]?.hasSuffix(":/usr/bin:/bin:/usr/sbin:/sbin") == true)
+    }
+
+    /// A key knows what Orca calls its chat, so a key whose chat is closed can still say which
+    /// one it was. The title is in the bridge's memory and its answers only.
+    @Test func aKeyKnowsItsChatsTitleAndKeepsItOffTheFile() {
+        var keys = OrcaKeys()
+        keys.take(slot: 1, chat: Self.one, status: .working, title: "Fix the build")
+        keys.take(slot: 3, chat: Self.two, title: "Two\nlines")
+        #expect(keys.titles == [Self.one: "Fix the build", Self.two: "Two lines"])
+        #expect(Reply.state(BridgeState(), pad: nil, orca: (2, keys)).contains(
+            #"{"slot":1,"session":"\#(Self.one)","status":"working","title":"Fix the build"}"#))
+        #expect(!keys.snapshot().contains("Fix the build"))
+        #expect(!keys.takeNotes().joined().contains("Fix the build"))
+
+        // Orca says what its chats are called now: a key's chat is renamed, a chat on no key
+        // is not remembered, and a closed chat keeps the title it had.
+        keys.end(Self.two)
+        let changed = keys.learn(titles: [Self.one: "Fix the release build", "on-no-key": "Another chat"])
+        #expect(changed)
+        #expect(keys.titles == [Self.one: "Fix the release build", Self.two: "Two lines"])
+        let again = keys.learn(titles: [Self.one: "Fix the release build"])
+        #expect(!again)
+
+        keys.free(slot: 1)
+        keys.free(slot: 3)
+        #expect(keys.titles.isEmpty)
+    }
+
     // MARK: The daemon
+
+    @Test func theBridgeAnswersWithOrcasChatsAndLearnsTheirTitles() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build", .working), Self.chat(Self.two, "New chat")]
+        var answer = ""
+        bench.daemon.orcaChats { answer = $0 }
+        #expect(answer == Reply.orcaChats(bench.scene.chats))
+
+        try bench.say(Self.take(2, Self.one))
+        #expect(bench.daemon.orca.titles == [Self.one: "Fix the build"])
+        bench.scene.chats = [Self.chat(Self.one, "Fix the release build", .working)]
+        bench.daemon.orcaChats { answer = $0 }
+        #expect(bench.daemon.orca.titles == [Self.one: "Fix the release build"])
+        // A title is in no line of the log and not in the keys file.
+        #expect(!bench.said("Fix the") && !bench.said("New chat"))
+        let file = try String(contentsOfFile: bench.directory + "/orca-keys.json", encoding: .utf8)
+        #expect(!file.contains("Fix the"))
+
+        bench.scene.orcaProblem = "Orca is not running"
+        bench.daemon.orcaChats { answer = $0 }
+        #expect(answer == Reply.error("Orca is not running"))
+    }
 
     /// D-053: a chat in Orca never takes a key of Claude's layer, and no key of Orca's until
     /// its person puts it there.

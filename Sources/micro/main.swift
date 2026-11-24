@@ -58,6 +58,7 @@ usage: micro <command> [--trace]
                             hold on the empty key does, or the chat with that Orca session ID
   ctl orca free <slot>      that key lets its chat go, as a hold on it does
   ctl orca show <slot>      that key's chat comes on screen in Orca, as a tap on it does
+  ctl orca chats            Orca's open Claude chats, with their titles, for a key to take
   ctl state                 show what the daemon is showing, and whether the pad is connected
   ctl events                stream key, dial and joystick events from the daemon
   hook                      Claude Code hook: reads the hook's JSON on stdin and reports the
@@ -630,6 +631,10 @@ case "ctl":
         request = object([("op", .string("set")), ("slot", .number(Double(slot))), ("status", .string(args[3]))])
     case "clear": request = object([("op", .string("clear"))])
     case "orca":
+        if args.count == 3, args[2] == "chats" {
+            request = object([("op", .string("orca.chats"))])
+            break
+        }
         guard args.count == 4 || (args.count == 5 && args[2] == "take"), ["take", "free", "show"].contains(args[2]),
               let slot = Int(args[3]) else { fail(usage) }
         var pairs: [(String, JSONValue)] = [("op", .string("orca." + args[2])), ("slot", .number(Double(slot)))]

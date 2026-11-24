@@ -241,11 +241,22 @@ Accessibility.
 - A chat in Orca never takes a key on layer 1. With no layer for Orca, its chats get no key at
   all. Other agents in Orca's chat view, such as Codex, report nothing.
 - The keys are kept in `orca-keys.json` next to the config file: Orca's session IDs and their
-  states, no titles. They survive a restart of the bridge and of Orca.
+  states, no titles. They survive a restart of the bridge and of Orca. The bridge remembers the
+  title of a key's chat in memory only, so after a restart the key of a closed chat shows the
+  start of its ID.
+- **In the MicroBridge window:** Behavior has the switch "Orca's chats have a layer of their
+  own". It writes the setting above for layer 2, and moves a ChatGPT entry in `layers` from 2
+  to 3 (and back when turned off). Pad lists Orca's six keys with each chat's title: "Show"
+  does what a tap does, "Free" what a hold on a taken key does, and "Put a chat here" puts the
+  chat on screen in Orca, or one picked from Orca's open chats, on an empty key. While the pad
+  is on Orca's layer the drawing shows Orca's keys.
 - By hand: `micro ctl orca take <slot> [id]`, `micro ctl orca free <slot>` and
-  `micro ctl orca show <slot>` do what a hold and a tap do (slots count from 0), and
+  `micro ctl orca show <slot>` do what a hold and a tap do (slots count from 0).
+  `micro ctl orca chats` lists Orca's open Claude chats with their IDs and titles, and
   `micro ctl state` lists the keys under `orca`. `micro orca` prints what the bridge sees of
   Orca and which chat a hold would take. It changes nothing; `--titles` adds the titles.
+- The bridge always asks the Orca on this Mac, also when your shell points Orca's command line
+  at another machine (`ORCA_ENVIRONMENT`).
 - Limits: a tab has no ID of its own, so a tab is known by its title, and a jump presses the
   first tab with the chat's title. A bot's Home chat was not in Orca's list of chats when
   looked at, so a key cannot take it. Seen in Orca 1.4.271.

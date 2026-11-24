@@ -488,3 +488,27 @@ Why: The owner said the README looked like a word dump. The first screen is wher
 Consequence: New long material goes to docs/, with a short version and a link in the README. A change to a moved section is made in docs/chatgpt.md. This was decided and built in the website's session (pull request 6, merged on main as e462d71) and is logged here so the numbers stay in one order.
 Rejected: Removing the long material from the repository.
 By: claude
+
+## D-062 (2026-11-23): The bridge's Orca commands always go to this machine's Orca
+
+Decision: When the bridge runs Orca's command line it removes ORCA_ENVIRONMENT and ORCA_PAIRING_CODE from the environment, so the command talks to the Orca on this Mac, wherever the bridge was started from.
+Why: The bridge reads the tabs of this Mac's Orca window and hears the hook of chats on this Mac. A shell that points Orca's command at another machine would make the bridge list that machine's chats and press tabs here that belong to none of them.
+Consequence: Chats on a paired Orca on another machine cannot be put on keys. A bridge on that machine has to do it there.
+Rejected: Following the shell's Orca environment: the list of chats and the window would then be from two machines.
+By: claude
+
+## D-063 (2026-11-23): The socket lists Orca's chats, and a key remembers its chat's title in memory only
+
+Decision: The daemon's socket takes orca.chats and answers with Orca's open Claude chats (session ID, title, status, workspace). The daemon keeps the title of each chat that is on a key in memory and gives it in the state answer; orca.chats refreshes it. Titles are not written to orca-keys.json and not to the log.
+Why: The window and the panel need a list to choose a chat from, and a key whose chat is closed can only be named by a title the bridge kept, because Orca no longer lists that chat. D-060 keeps Orca's IDs and states only on file, and that stays true.
+Consequence: After the bridge restarts, the key of a closed chat shows the start of its ID until it is freed. The keys of open chats get their titles back with the next orca.chats. Anyone who can use the socket (the owner's account) can read the titles.
+Rejected: Keeping titles in orca-keys.json: it would put what Orca's window shows on disk, against D-060. Asking Orca from the window itself: the window would then need Orca's command line and a second copy of the bridge's rules.
+By: claude
+
+## D-064 (2026-11-23): The window gives Orca layer 2 with one switch, and ChatGPT's layer moves to 3
+
+Decision: The Behavior screen has a switch 'Orca's chats have a layer of their own'. On, it writes layerApps.2 = [orca] and moves a ChatGPT entry from layers.2 to layers.3. Off, it removes Orca's layer and moves ChatGPT back to layer 2. The ChatGPT switch takes the first layer from 2 that the bridge does not drive. The Pad screen draws the six keys of the layer the pad is on, and lists Orca's keys with Show, Free and a menu that puts a chat on an empty key.
+Why: A layer is the bridge's own or another app's, not both (the config check refuses the mix), so the old ChatGPT switch, which always wrote layers.2, would clash with Orca's layer. The owner asked for layers kept apart: Claude on 1, Orca on 2, ChatGPT on 3.
+Consequence: The window writes only layer 2 for Orca. A file that gives layer 2 to other apps by hand is left alone and the window says so. The pad's profile in Work Louder Input still has to have that many layers, which only the owner can set there.
+Rejected: Letting the owner pick any layer number in the window: more to explain, and the file still allows it by hand.
+By: claude
