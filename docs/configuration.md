@@ -254,7 +254,8 @@ Accessibility.
   panel to Orca's right sidebar. It lists the six keys with Show, Free and the same menu, and
   under "What the controls do in Orca" it changes what a command does on a press while Orca is
   in front. The change is written to this config file by the bridge, which refuses an action it
-  does not know. Not loaded into a running Orca yet (2026-11-24).
+  does not know. Loaded into a running Orca on 2026-11-24: the panel showed the keys as the
+  bridge has them. Its buttons have not been pressed there yet.
 - By hand: `micro ctl orca take <slot> [id]`, `micro ctl orca free <slot>` and
   `micro ctl orca show <slot>` do what a hold and a tap do (slots count from 0).
   `micro ctl orca chats` lists Orca's open Claude chats with their IDs and titles, and

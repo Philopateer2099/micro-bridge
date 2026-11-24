@@ -862,6 +862,29 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The panel loaded into the owner's Orca (2026-11-24 13:50 UTC), it shows the keys
+
+The owner said to load it, read what Orca would grant, and said to approve it. Every command
+carried `--environment local`.
+
+- `orca plugin dev load <the folder>` put the folder in Orca as `local.microbridge 0.1.0`,
+  pending. Orca named the grant: its own code in a separate Node.js process with the user
+  account's access to the machine, and one panel. The same command with `--approve` and the
+  fingerprint Orca printed made it run.
+- `orca plugin dev request local.microbridge pad.state` answered through the worker: the bridge
+  running, the pad connected, layer 2 as Orca's, key 1 with its chat and the chat's title, and
+  the 2 chats open in this Mac's Orca. `pad.commands` answered with 10 commands. So a worker
+  inside Orca can open the bridge's Unix socket, which had only been read from Orca's own words.
+- `orca plugin shot local.microbridge --panel pad` showed the panel in the right sidebar and
+  saved its picture: "Pad connected", "Layer 2 of the pad. The pad is on layer 3 now.", key 1
+  with its chat, Idle, Show 1 and Free 1, keys 2 to 6 empty with "Put a chat here", the closed
+  section "What the controls do in Orca", Refresh. `orca plugin logs` had no line from it.
+
+Not tried in the running Orca: a press on Show or Free, a chat put on a key from a menu, and
+Save in "What the controls do in Orca", which writes the owner's config file. A picture with
+that section opened was refused, because Orca presses a control for a picture only while its
+window is hidden.
+
 ### The owner's finger test on Orca's layer (2026-11-24 13:42 UTC), works
 
 The owner did the test on the pad and said it worked. The bridge's log of those two minutes:

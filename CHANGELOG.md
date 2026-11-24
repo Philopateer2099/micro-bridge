@@ -51,7 +51,8 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   that puts a chat on an empty key, and its drawing shows the keys of the layer the pad is on.
 - **A MicroBridge panel in Orca** (`orca-plugin/`): the same six keys in Orca's right sidebar,
   and what each command does while Orca is in front, changed there and saved to the config
-  file by the bridge. Tested with Orca's plugin tools; not loaded into a running Orca yet.
+  file by the bridge. Tested with Orca's plugin tools and loaded into a running Orca, where it showed the pad's
+  keys; its buttons have not been pressed there yet.
 
 ### The other controls
 

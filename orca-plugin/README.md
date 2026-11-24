@@ -61,5 +61,7 @@ for the daemon, the panel against a stand-in for the worker) and `orca plugin ch
 `MICROBRIDGE_SOCKET` pointing where nothing listens, so the running bridge is left alone.
 `orca plugin types .` writes Orca's typings to `.orca/`, which stays out of the repository.
 
-Seen with Orca 1.4.271. The panel has not been loaded into a running Orca yet (2026-11-24): the
-worker and the panel pass their tests and Orca's render check, and that is all.
+Seen with Orca 1.4.271. Loaded into a running Orca on 2026-11-24: the worker reached the
+bridge's socket and answered with the pad's state, the chats and the commands, and Orca drew
+the panel with the six keys. The panel's buttons and its Save have not been pressed in a
+running Orca yet; they pass their tests against a stand-in.
