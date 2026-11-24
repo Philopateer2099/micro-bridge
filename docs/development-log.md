@@ -862,6 +862,22 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The owner's finger test on Orca's layer (2026-11-24 13:42 UTC), works
+
+The owner did the test on the pad and said it worked. The bridge's log of those two minutes:
+
+- 13:40:47, 13:40:57, 13:41:45: taps on the touch sensor. The pad went to layer 2, to layer 3
+  and back to layer 2, and the bridge said whose each layer is. On layer 3 it kept the pad,
+  because ChatGPT was not open.
+- 13:42:04: `AG.hold key 1 on layer 2: the key takes the chat on screen in Orca`, then
+  `key 1 takes chat 564f669d (done)`.
+- 13:42:16: `AG.press key 1 on layer 2 in com.stablyai.orca: ack, jump, pane:chat`, then
+  `its tab is on screen already`.
+
+Not in the log, so not tried on the pad yet: a tap that shows a chat from another tab, the
+hold that frees a key (key 1 still holds the chat), the dim key, Approve and Decline on a
+permission card. The lights are the owner's word; the log does not show them.
+
 ### The finished build was installed (2026-11-24 13:36 UTC), the bridge runs
 
 The owner plugged the pad in and said to install. `scripts/install` built the release from

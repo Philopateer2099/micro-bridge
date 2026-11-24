@@ -266,8 +266,12 @@ Accessibility.
   first tab with the chat's title. A bot's Home chat was not in Orca's list of chats when
   looked at, so a key cannot take it. Seen in Orca 1.4.271.
 - Tried on a real Orca through the socket on 2026-11-24: take, free, show across workspaces,
-  the dim key of a closed chat. Not tried from the pad's own keys yet: the hold, the tap, the
-  lights.
+  the dim key of a closed chat.
+- Tried on the pad on 2026-11-24 (13:40 to 13:42 UTC): taps on the touch sensor moved the pad
+  to layer 2, to layer 3 and back, and the bridge followed each one. A hold on the empty key 1
+  took the chat on screen and the key lit. A tap on key 1 found its chat's tab on screen
+  already. Not tried on the pad yet: a tap that shows a chat from another tab, the hold that
+  frees a key, the dim key, Approve and Decline on a permission card.
 
 ## Checked on the pad (2026-11-11 and 2026-11-12)
 
