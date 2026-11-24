@@ -196,7 +196,7 @@ build log are in [docs/development-log.md](docs/development-log.md).
 
 Built from 2026-11-10 against a real pad on firmware v0.6.1 (0.6.3 since 2026-11-22). Each
 behavior below was checked on the hardware or in the daemon's log, and the fixes are covered
-by the test suite (297 tests).
+by the test suite (326 tests).
 
 - **Mapping the pad.** Every key, the dial and the stick were captured through the daemon. The
   wide bottom key sits on two switches and sends two events about 6 ms apart. The dial sends
@@ -290,7 +290,7 @@ To report a security problem: [SECURITY.md](SECURITY.md).
 
 ```sh
 swift build
-scripts/test           # 297 tests; plain `swift test` works when Xcode is installed
+scripts/test           # 326 tests; plain `swift test` works when Xcode is installed
 scripts/micro listen   # print every key, dial and stick event
 scripts/micro paint    # light the six Agent Keys in six states
 scripts/micro app --demo   # the window with made-up sessions; it writes nothing

@@ -12,9 +12,9 @@ struct OrcaTests {
     static let orange = Int(AgentStatus.needsYou.color)
     static let red = Int(AgentStatus.failed.color)
     static let dark = [0, 0, 0, 0, 0, 0]
-    static let one = "11111111-aaaa-4bbb-8ccc-000000000001"
-    static let two = "22222222-aaaa-4bbb-8ccc-000000000002"
-    static let place = "0123456789abcdef0123456789abcdef0123::/Users/someone/proj/app"
+    static let one = "11111111-chat-one"
+    static let two = "22222222-chat-two"
+    static let place = "0123456789abcdef0123456789abcdef0123::/Users/x/proj/app"
 
     static func chat(_ id: String, _ title: String, _ status: AgentStatus = .idle) -> OrcaChat {
         OrcaChat(id: id, title: title, worktree: place, status: status)
@@ -105,7 +105,7 @@ struct OrcaTests {
        "title":"Fix the build","paneKey":"structured-agent-session-\(one):0a1b2c3d","lastAssistantMessage":"…"},
       {"orcaSessionId":"\(two)","kind":"chat","agent":"claude","worktreeId":"\(place)","title":"New chat"},
       {"orcaSessionId":null,"kind":"terminal","agent":"claude","state":"done","worktreeId":"\(place)","title":"zsh"},
-      {"orcaSessionId":"33333333-aaaa-4bbb-8ccc-000000000003","kind":"chat","agent":"codex","state":"blocked",
+      {"orcaSessionId":"33333333-chat-three","kind":"chat","agent":"codex","state":"blocked",
        "worktreeId":"\(place)","title":"Another agent"}
     ],"truncated":false,"hostScope":"local"},"_meta":{}}
     """

@@ -480,3 +480,11 @@ Why: A layer needs the pad's keys on it, which only the owner can set up, so no 
 Consequence: Every command now lists a third place, In Orca, in the MicroBridge window. A config file that sets APPR or REJ itself replaces the whole command and needs the orca entries added by hand. The keys are saved in orca-keys.json with Orca's IDs and states only.
 Rejected: A key fallback such as Return for Approve in Orca: with no card on screen it would send the message being typed.
 By: claude
+
+## D-061 (2026-11-23): The README is a front page, and the manual lives in docs/
+
+Decision: The README opens with the pad's picture, the lights, the controls and the install commands. Long material is folded into details sections or moved to docs/ word for word: the ChatGPT sections are in docs/chatgpt.md. Nothing is removed, and the heading the website links to stays in the README with a short version under it.
+Why: The owner said the README looked like a word dump. The first screen is where a visitor finds out what the project does and how to install it. The long sections serve people who already use it.
+Consequence: New long material goes to docs/, with a short version and a link in the README. A change to a moved section is made in docs/chatgpt.md. This was decided and built in the website's session (pull request 6, merged on main as e462d71) and is logged here so the numbers stay in one order.
+Rejected: Removing the long material from the repository.
+By: claude

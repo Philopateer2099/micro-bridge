@@ -862,6 +862,19 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Main's new README came into the branch (2026-11-24 00:40 UTC), nothing built
+
+- Pull request 6 from the website's session was merged on main (`e462d71`). The README is a
+  front page now, and the long ChatGPT sections are in `docs/chatgpt.md` (D-061). Main was
+  merged into `orca-layer` with no conflict. The sentence on Orca's layer is in the new README,
+  and its test count says 326.
+- `scripts/check-public` failed on `Tests/MicroKitTests/OrcaTests.swift` once that file was
+  committed. It held a made-up home folder path with a name longer than one letter, and three
+  made-up session IDs in the shape of a real one. The check reads only the files git tracks, so
+  it had passed while the file was new. The test now uses `/Users/x/…` and IDs that are not in
+  that shape. Run the check after `git add`, not before.
+- `scripts/test`: 326 tests pass. `scripts/check-public`: no private data found.
+
 ### Orca's chats on the keys of Orca's layer (2026-11-24 00:30 UTC), built, not on the pad yet
 
 Step 3 of the Orca build (D-056 to D-060, on D-043 to D-055). On the branch `orca-layer`, not
