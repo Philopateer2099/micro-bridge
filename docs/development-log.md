@@ -862,6 +862,50 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Pull request 7 was merged (2026-11-24 16:18 UTC)
+
+The owner pressed Create PR at 14:21 UTC and said to merge at 16:18.
+
+- Before the push, on f48f4df: `scripts/test` passed 343 tests, `scripts/test-plugin` 11, and
+  `scripts/check-public` found nothing.
+- Pull request 7 was opened against main with the text prepared the night before. The app
+  could not turn on its CI monitor for this account, so CI was read by hand: `test` passed in
+  2m24s and the secret scan passed.
+- Merged with a merge commit, 27fb338. Its files are those of f48f4df, which is also what the
+  installed build runs but for docs.
+
+### The owner's second go on the pad (2026-11-24 16:14 to 16:16 UTC), the other gestures work
+
+From the bridge's log, on layer 2:
+
+- A hold on a taken key freed it (`AG.hold key 1 on layer 2: the key lets its chat go`), on
+  key 1 and on key 2.
+- A hold on an empty key took the chat on screen, three times, with two different chats.
+- A tap showed a chat from another tab: `key 1: chat …: its tab is on screen now`, and the same
+  for key 2 a second later. This is the jump the first test had not run.
+- A tap on an empty key said `no chat on this key. Hold it to take the chat on screen in Orca`.
+- Once a key took nothing: `key 1 takes no chat: Orca's window shows no tabs`. That line and
+  one `key 1 is free` have no `AG.hold` before them, so they came over the socket, from the
+  panel or the window. The log does not say which.
+- Four taps between 16:16:19 and 16:16:39 are in the log twice, under a second apart. The
+  second of each pair found the tab on screen already. Two quick taps or the doubled key press
+  of issue 2: the log cannot tell.
+
+Still not tried on the pad: the dim key, and Approve and Decline on a permission card.
+
+### The new window against the running bridge (2026-11-24 14:23 UTC), it shows Orca's keys
+
+Opened in the background after the install and looked at with a screenshot of the window only.
+
+- The Pad screen said the pad is on layer 3, where its keys are off, and named the connection
+  with "layer 3".
+- "Claude's keys · layer 1" listed the six sessions.
+- "Orca's keys · layer 2" listed key 1 with its chat's title, Idle, Show and Free, and keys 2
+  to 6 with "Put a chat here".
+
+Not pressed in the running window: Show, Free, the menu of an empty key, and the switch on
+Behavior.
+
 ### The panel loaded into the owner's Orca (2026-11-24 13:50 UTC), it shows the keys
 
 The owner said to load it, read what Orca would grant, and said to approve it. Every command
