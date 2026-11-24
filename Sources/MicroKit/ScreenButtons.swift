@@ -897,6 +897,58 @@ public enum ScreenButtons {
         }
     }
 
+    /// The usable buttons inside every box with that label, id or class, in the focused window
+    /// of the running app with this bundle id, top to bottom, and how many such boxes there
+    /// are. A button inside another button is part of that one.
+    public static func buttons(inBox box: String, bundleID: String, maxSeconds: Double = 2)
+        -> (buttons: [ScreenButton], boxes: Int, problem: String?) {
+        let started = Date()
+        let window: Window
+        switch open(bundleID) {
+        case let .success(opened): window = opened
+        case let .failure(problem): return ([], 0, problem.text)
+        }
+        var pass = Pass(detail: false, maxNodes: 30000, deadline: started.addingTimeInterval(maxSeconds))
+        var boxes = 0
+        gather(window.root, rule: ButtonRule(box: box, pick: .first), boxes: &boxes, pass: &pass)
+        guard boxes > 0 else { return ([], 0, "its box is not on screen") }
+        return (pass.found.filter(\.enabled), boxes, nil)
+    }
+
+    /// Gathers the buttons of every box the rule names, top to bottom.
+    private static func gather(_ element: AXUIElement, rule: ButtonRule, boxes: inout Int, pass: inout Pass) {
+        guard pass.mayVisit() else { return }
+        var raw: CFArray?
+        guard AXUIElementCopyMultipleAttributeValues(element, boxFacts as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &raw) == .success,
+              let values = raw as? [AnyObject], values.count == boxFacts.count else { return }
+        func text(_ index: Int) -> String? {
+            guard let string = values[index] as? String, !string.isEmpty else { return nil }
+            return string
+        }
+        let role = text(0) ?? ""
+        guard role != kAXButtonRole, role != kAXStaticTextRole else { return }
+        if rule.isBox(id: text(4), label: text(2) ?? text(3), classes: values[5] as? [String] ?? []) {
+            boxes += 1
+            collect(element, around: [], pass: &pass)
+            return
+        }
+        for child in values[1] as? [AnyObject] ?? [] {
+            gather(child as! AXUIElement, rule: rule, boxes: &boxes, pass: &pass)
+        }
+    }
+
+    /// The text a button shows: the first run of text directly inside it. A tab shows its title.
+    public static func text(in button: ScreenButton) -> String? {
+        guard let children = attribute(button.element, kAXChildrenAttribute) as? [AnyObject] else { return nil }
+        for child in children.prefix(12) {
+            let element = child as! AXUIElement
+            guard attribute(element, kAXRoleAttribute) as? String == kAXStaticTextRole,
+                  let value = attribute(element, kAXValueAttribute) as? String, !value.isEmpty else { continue }
+            return value
+        }
+        return nil
+    }
+
     // MARK: Walking
 
     private struct Window {

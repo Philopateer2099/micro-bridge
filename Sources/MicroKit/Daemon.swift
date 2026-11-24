@@ -18,10 +18,17 @@ struct DaemonWorld {
     /// What people call the app with that bundle id.
     var appName: @MainActor (String) -> String = { Daemon.name(ofApp: $0) }
     var log: @MainActor (String) -> Void = { print(ISO8601DateFormatter().string(from: Date()), $0) }
+    /// Scrolls what is under the pointer by that many points, positive up. Nil: as a mouse
+    /// wheel does. Tests count the points here, so that nothing on screen moves.
+    var scroll: (@MainActor (Double) -> Void)?
+    /// How the bridge asks Orca about its chats, and shows one.
+    var orca = OrcaLink()
 
     var socket: String { directory + "/daemon.sock" }
     var config: String { directory + "/config.json" }
     var sessions: String { directory + "/sessions.json" }
+    /// The chats on the keys of Orca's layer.
+    var orcaKeys: String { directory + "/orca-keys.json" }
 }
 
 /// Owns the pad. Keeps the six Agent Keys showing `state`, repaints after every reconnect,
@@ -30,6 +37,10 @@ struct DaemonWorld {
 @MainActor
 public final class Daemon {
     private var state = BridgeState()
+    /// The chats on the keys of Orca's layer, put there by hand.
+    private(set) var orca = OrcaKeys()
+    /// Said once: a chat in Orca reported while no layer is Orca's.
+    private var saidNoOrcaLayer = false
     private var config = Config.builtIn
     private var configStamp: Date?
     private var configRead = false
@@ -75,6 +86,8 @@ public final class Daemon {
     /// The pad's last answer to `device.status`, and the layer it put the pad on.
     private var padStatus: DeviceStatus?
     private var layers = LayerWatch()
+    /// The layer the bridge last acted on. See `actingLayer`.
+    private var actedLayer = LayerWatch.ours
     private var battery = BatteryWatch(threshold: 20)
 
     private var pad: Pad?
@@ -132,6 +145,7 @@ public final class Daemon {
         log("typing keys into apps: \(Accessibility.granted ? "allowed" : "not allowed yet")")
         loadConfig()
         restoreSessions()
+        restoreOrcaKeys()
         connect()
         watchLock()
         watchFront()
@@ -184,6 +198,8 @@ public final class Daemon {
         sharing.apps = config.stepAsideFor
         sharing.layers = config.layers
         sharing.layerKeys = config.layerKeys
+        sharing.own = config.ownLayers
+        _ = layerActedOn()
         frontChanged(world.frontApp())
         if config.typesKeys || config.lighting.offWhenLocked, !Accessibility.granted, !askedForAccessibility {
             askedForAccessibility = true
@@ -193,6 +209,75 @@ public final class Daemon {
         watchShortcut()
         dirty = true
         flush()
+    }
+
+    // MARK: Commands, for the panel in Orca
+
+    /// The config file as it is on disk, or an empty one when there is none. Nil when the
+    /// file is not a JSON object.
+    private func configFile() -> ConfigFile? {
+        guard let text = try? String(contentsOfFile: world.config, encoding: .utf8) else { return ConfigFile(text: "{}") }
+        return ConfigFile(text: text)
+    }
+
+    /// What the commands do in `target`: every command a control runs, then every other one
+    /// that has an entry for that target. The panel in Orca shows them and changes them.
+    func commands(in target: String) -> [Reply.CommandRow] {
+        let file = configFile() ?? ConfigFile.builtIn
+        let order = ["AG"] + Config.keyControls + ["DIAL", "STICK"]
+        var controls: [String: [String]] = [:]
+        for (binding, actions) in config.bindings {
+            guard let control = binding.split(separator: ".").first.map(String.init) else { continue }
+            for case let .command(name, _) in actions where controls[name]?.contains(control) != true {
+                controls[name, default: []].append(control)
+            }
+        }
+        func place(_ control: String) -> Int { order.firstIndex(of: control) ?? order.count }
+        let rows = config.commands.keys.compactMap { name -> Reply.CommandRow? in
+            let here = file?.commandLists(name, target: target, defaults: ConfigFile.builtIn).filter { !$0.actions.isEmpty } ?? []
+            let elsewhere = file?.commandLists(name, target: "default", defaults: ConfigFile.builtIn)
+                .filter { !$0.actions.isEmpty } ?? []
+            let runBy = (controls[name] ?? []).sorted { place($0) < place($1) }
+            guard !runBy.isEmpty || !here.isEmpty else { return nil }
+            return Reply.CommandRow(name: name, controls: runBy.map { Config.controlTitles[$0] ?? $0 }, here: here,
+                                    elsewhere: elsewhere)
+        }
+        func first(_ row: Reply.CommandRow) -> Int { (controls[row.name] ?? []).map(place).min() ?? order.count + 1 }
+        return rows.sorted { one, two in first(one) != first(two) ? first(one) < first(two) : one.name < two.name }
+    }
+
+    /// Writes what a command does on one trigger in one target to the config file, by the
+    /// rule the MicroBridge window uses. Returns why it did not, or nil when it did.
+    func setCommand(_ name: String, target: String, trigger: String = "press", actions: [String]) -> String? {
+        guard config.commands[name] != nil else { return "no command named \(name)" }
+        for text in actions {
+            guard let action = Action.parse(text) else { return "\(text): not an action the bridge knows" }
+            if case .command = action { return "\(text): a command cannot run another command" }
+        }
+        guard var file = configFile() else { return "the config file is not valid JSON: fix it in an editor first" }
+        let before = file
+        file.setCommand(name, target: target, trigger: trigger, actions: actions, defaults: ConfigFile.builtIn)
+        guard file != before else { return nil }
+        let text = file.text
+        do {
+            _ = try Config.parse(text)
+        } catch {
+            return "not saved: " + error.description
+        }
+        let manager = FileManager.default
+        let path = world.config, backup = path + ".before-app"
+        do {
+            // The first save rewrites the file's layout, so keep the file as the person wrote it.
+            if manager.fileExists(atPath: path), !manager.fileExists(atPath: backup) {
+                try manager.copyItem(atPath: path, toPath: backup)
+            }
+            try text.write(toFile: path, atomically: true, encoding: .utf8)
+        } catch {
+            return "could not save the config file: \(error.localizedDescription)"
+        }
+        log("command \(name): \(trigger) in \(target) changed over the socket")
+        loadConfig()
+        return nil
     }
 
     // MARK: Socket
@@ -208,15 +293,23 @@ public final class Daemon {
         switch command {
         case .state:
             let access = Reply.Access(inputMonitoring: InputMonitoring.current, accessibility: Accessibility.granted)
-            client.send(Reply.state(state, pad: pad?.info, status: padStatus, shown: shown, access: access))
+            client.send(Reply.state(state, pad: pad?.info, status: padStatus, shown: shown, access: access,
+                                    orca: orcaLayer.map { ($0, orca) }))
         case .subscribe:
             client.subscribed = true
             client.send(Reply.ok)
             client.send(Reply.connection(pad != nil))
         case .report, .end, .forget, .set, .clear:
-            if state.apply(command) { lightsChanged() }
-            client.send(Reply.ok)
+            take(command) { client.send(Reply.ok) }
+        case .orcaTake, .orcaFree, .orcaShow:
+            orcaCommand(command) { problem in client.send(problem.map(Reply.error) ?? Reply.ok) }
             flush()
+        case .orcaChats:
+            orcaChats { client.send($0) }
+        case let .commands(target):
+            client.send(Reply.commands(commands(in: target)))
+        case let .commandSet(name, target, trigger, actions):
+            client.send(setCommand(name, target: target, trigger: trigger, actions: actions).map(Reply.error) ?? Reply.ok)
         case let .pin(id, _), let .unpin(id):
             guard state.sessions[id] != nil else {
                 client.send(Reply.error("no session \"\(id)\""))
@@ -234,6 +327,23 @@ public final class Daemon {
         }
     }
 
+    /// Does what a session said, or a key painted by hand. `answered` runs before the lights
+    /// are written, so whoever said it does not wait for the pad. Tests call it by hand.
+    func take(_ command: Command, answered: () -> Void = {}) {
+        switch command {
+        case .orcaTake, .orcaFree, .orcaShow:
+            orcaCommand(command) { _ in }
+        default:
+            if !orcaHeard(command), state.apply(command) { lightsChanged() }
+        }
+        answered()
+        flush()
+    }
+
+    /// A conversation with the pad is under way. Its wait for the answer runs the main run
+    /// loop, so a test can find itself in the middle of one after an `await`.
+    var isBusy: Bool { flushing }
+
     /// One second has passed. The timer calls it; tests call it by hand.
     func tick() {
         ticks += 1
@@ -243,6 +353,7 @@ public final class Daemon {
         // Every few seconds, forget sessions whose agent process has exited.
         if ticks % 5 == 0 {
             if state.prune(isAlive: ProcessTree.isAlive) { lightsChanged() }
+            for chat in orca.gone(isAlive: ProcessTree.isAlive) { chatExited(chat) }
             saveSessions()
         }
         // A pressed key's hold on its session runs out by itself.
@@ -272,8 +383,9 @@ public final class Daemon {
         checkShown()
         flush()
         connect()
-        // With `layers` set, a tap on the touch sensor passes the pad on: look often.
-        if ticks % 5 == 0 || !config.layers.isEmpty {
+        // With `layers` set, a tap on the touch sensor passes the pad on: look often. With a
+        // second layer of the bridge's own, a tap changes whose keys they are.
+        if ticks % 5 == 0 || !config.layers.isEmpty || !config.ownLayers.isEmpty {
             checkLayer()
             // Accessibility may have been granted since.
             watchShortcut()
@@ -302,7 +414,17 @@ public final class Daemon {
             log("session \(session.id.prefix(8)) was stopped by hand: its key goes to idle")
             if state.stopped(session.id) { lightsChanged() }
         }
-        recordRead = recordRead.filter { state.sessions[$0.key] != nil }
+        for chat in orca.watchable {
+            guard let path = chat.transcript, let heard = chat.heard,
+                  let changed = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date,
+                  recordRead[chat.id] != changed else { continue }
+            recordRead[chat.id] = changed
+            guard let tail = Transcript.tail(of: path), let at = Transcript.interruptedAt(tail: tail),
+                  at >= heard.addingTimeInterval(-1) else { continue }
+            log("chat \(chat.id.prefix(8)) was stopped by hand: it is idle now")
+            if orca.stopped(chat.id) { lightsChanged() }
+        }
+        recordRead = recordRead.filter { state.sessions[$0.key] != nil || orca.chats[$0.key] != nil }
     }
 
     /// The lights are off now: after a quiet spell, or for a lock.
@@ -424,12 +546,22 @@ public final class Daemon {
         activity()
         let now = ProcessInfo.processInfo.systemUptime
         let app = world.frontApp()
-        if case let .joystick(angle, distance) = event { stickMoved(angle: angle, distance: distance, app: app, at: now) }
+        if case let .joystick(angle, distance) = event {
+            if let its = otherLayer(of: app) {
+                stopScrolling(why: "\(app ?? "the app in front") is layer \(its)'s and the pad is on layer \(actingLayer)")
+            } else {
+                stickMoved(angle: angle, distance: distance, app: app, at: now)
+            }
+        }
         // An Agent Key that does something when held presses when it comes up, so that
         // holding it does not open its session first.
+        // On Orca's layer a hold takes a chat or frees the key, whatever `agentKeys` says.
+        let orcaKeys = actingLayer == orcaLayer
         let fired = gestures.handle(event, at: now, waitsForHold: { [config] control in
-            control == "AG" && !config.actions(for: control, "hold", app: app).isEmpty
-        }, hasDoubleTap: { [config] control in config.hasDoubleTap(control, app: app) })
+            control == "AG" && (orcaKeys || !config.actions(for: control, "hold", app: app).isEmpty)
+        }, hasDoubleTap: { [config] control in
+            !(orcaKeys && control == "AG") && config.hasDoubleTap(control, app: app)
+        })
         for one in fired { perform(one) }
         if gestures.hasKeysDown, holdTimer == nil {
             holdTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
@@ -489,7 +621,7 @@ public final class Daemon {
         let points = scroller.step(speed: scrollSpeed, seconds: min(now - scrollStepAt, 0.1))
         scrollStepAt = now
         guard points != 0 else { return }
-        runner.scroll(points)
+        if let scroll = world.scroll { scroll(points) } else { runner.scroll(points) }
         if points > 0 { scrollPush.up += points } else { scrollPush.down -= points }
     }
 
@@ -505,6 +637,17 @@ public final class Daemon {
     }
 
     private func perform(_ fired: Gestures.Fired) {
+        let layer = actingLayer
+        if let pressed = fired.slot, layer != LayerWatch.ours {
+            // The sessions on the first layer's keys are not this layer's. Orca's layer has
+            // its chats; any other layer of the bridge's own has no agents.
+            if layer == orcaLayer {
+                orcaKey(pressed, fired.trigger, layer: layer)
+            } else if fired.trigger == "press" {
+                log("AG.press key \(pressed + 1) on layer \(layer): no agent on this key, nothing to do")
+            }
+            return
+        }
         if let slot = fired.slot, state.owner(of: slot) != nil, selected != slot {
             selected = slot
         }
@@ -527,6 +670,12 @@ public final class Daemon {
             if trigger == "empty", let pressed = fired.slot { log("AG.press key \(pressed + 1): no session on this key, nothing to do") }
             return
         }
+        // Layers are isolated: a control does nothing in an app of another layer. An Agent
+        // Key still acts, since it brings its own app to the front.
+        if fired.slot == nil, let its = otherLayer(of: app) {
+            log("\(fired.control).\(trigger) does nothing: \(app ?? "the app in front") is layer \(its)'s and the pad is on layer \(layer)")
+            return
+        }
         // By trigger, so a dial press that clicked a card's "Next" does not silence the turns after it.
         let guarded = "\(fired.control).\(trigger)#\(fired.slot ?? -1)"
         if clickGuard.blocks(guarded) {
@@ -537,7 +686,8 @@ public final class Daemon {
             state.reserve(pressed)
             reservedAt = Date()
         }
-        let slot = fired.slot ?? selected
+        // The key pressed last is a key of the first layer.
+        let slot = fired.slot ?? (layer == LayerWatch.ours ? selected : nil)
         let session = slot.flatMap { state.owner(of: $0) }
         let key = fired.slot.map { " key \($0 + 1)" } ?? ""
         let names = actions.map(\.description).joined(separator: ", ")
@@ -659,6 +809,7 @@ public final class Daemon {
         pad = nil
         padStatus = nil
         layers.reset()
+        actedLayer = LayerWatch.ours
         // The next pad's first reading is where it starts, not a visit. Who has the pad stays.
         _ = sharing.layer(nil, running: [])
         quickLayer?.invalidate()
@@ -808,9 +959,27 @@ public final class Daemon {
         }
     }
 
+    /// Keys shown red for a moment: a hold that could take no chat.
+    private var flashed: Set<Int> = []
+
+    /// The key shows red and goes back, twice: the pad's way to say no on a key that is dark.
+    private func flash(_ slot: Int) {
+        for step in 0 ..< 4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15 * Double(step)) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if step % 2 == 0 { self.flashed.insert(slot) } else { self.flashed.remove(slot) }
+                    self.dirty = true
+                    self.flush()
+                }
+            }
+        }
+    }
+
     /// Says in the log when an Agent Key went from an idle session to one that needs its person.
     private func noteHandovers() {
         for note in state.takeNotes() { log(note) }
+        for note in orca.takeNotes() { log(note) }
         for handover in state.takeHandovers() {
             // "The key pressed last" meant the session that just left it.
             if selected == handover.slot { selected = nil }
@@ -835,8 +1004,23 @@ public final class Daemon {
                     : "key \(pulses.sorted().map { String($0 + 1) }.joined(separator: ", ")) pulses: its session is on screen")
             }
             do {
-                var lights = state.lights(config.lighting, selected: pulses, dimmed: dark)
+                // Every layer of the bridge's own has its own six keys: the first shows Claude's
+                // sessions, Orca's shows its chats, and any other has no agents.
+                var lights: [SlotLight]
+                if actingLayer == LayerWatch.ours {
+                    lights = state.lights(config.lighting, selected: pulses, dimmed: dark)
+                } else if actingLayer == orcaLayer {
+                    lights = orca.lights(config.lighting, dimmed: dark)
+                } else {
+                    lights = (0 ..< BridgeState.slotCount).map { AgentStatus.off.light(slot: $0) }
+                }
                 for slot in blinked where lights.indices.contains(slot) { lights[slot] = AgentStatus.off.light(slot: slot) }
+                if !dark {
+                    for slot in flashed where lights.indices.contains(slot) {
+                        lights[slot] = AgentStatus.failed.light(slot: slot, brightness: config.lighting.brightness,
+                                                                color: config.lighting.color(.failed))
+                    }
+                }
                 try pad.setSlots(lights, timeout: 2)
                 if unanswered > 0 {
                     log("pad is answering again")
@@ -897,6 +1081,7 @@ public final class Daemon {
     /// Writes the sessions and their keys to disk when they have changed, so a restart of the
     /// bridge keeps every key on its session.
     private func saveSessions() {
+        saveOrcaKeys()
         guard state != savedState else { return }
         let path = world.sessions
         do {
@@ -923,6 +1108,316 @@ public final class Daemon {
         for note in state.takeNotes() { log(note) }
         savedState = state
         dirty = true
+    }
+
+    /// The keys of Orca's layer as last written to disk.
+    private var savedOrca = OrcaKeys()
+
+    /// Writes the chats on Orca's keys to disk when they have changed. They are there by hand,
+    /// so a restart of the bridge or of Orca must not lose them.
+    private func saveOrcaKeys() {
+        guard orca != savedOrca else { return }
+        let path = world.orcaKeys
+        do {
+            try orca.snapshot().write(toFile: path, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+            savedOrca = orca
+        } catch {
+            log("could not write \(path): \(error.localizedDescription)")
+        }
+    }
+
+    /// Takes the chats on Orca's keys back from disk. A chat whose process is gone shows as
+    /// closed until it reports again, or until a tap finds its tab open in Orca. Tests call it
+    /// by hand.
+    func restoreOrcaKeys() {
+        guard let text = try? String(contentsOfFile: world.orcaKeys, encoding: .utf8) else { return }
+        let held = orca.restore(text) { pid, saved in
+            guard ProcessTree.isAlive(pid), let started = ProcessTree.started(pid) else { return false }
+            return started <= saved.timeIntervalSince1970
+        }
+        savedOrca = orca
+        guard held > 0 else { return }
+        log("Orca chats from before the restart: \(held) keep their keys, \(orca.dimSlots.count) of them closed")
+        dirty = true
+    }
+
+    // MARK: Orca's layer
+
+    /// The layer whose six keys hold Orca's chats: the one `layerApps` gives Orca, when that
+    /// is not the first. The first layer's keys are Claude's sessions' (D-053).
+    private var orcaLayer: Int? {
+        guard let layer = config.layer(ofApp: Orca.bundleID), layer != LayerWatch.ours else { return nil }
+        return layer
+    }
+
+    private static func short(_ id: String) -> Substring { id.prefix(8) }
+
+    /// What a chat in Orca said goes to the keys of Orca's layer, never to a key of Claude's
+    /// (D-053). True when the command was about such a chat.
+    private func orcaHeard(_ command: Command) -> Bool {
+        switch command {
+        case let .report(_, status, pid, cwd, host, transcript):
+            guard let id = host?.orcaChat else { return false }
+            guard orcaLayer != nil else {
+                if !saidNoOrcaLayer {
+                    saidNoOrcaLayer = true
+                    log("a chat in Orca reported, but no layer is Orca's (layerApps): it gets no key. Said once")
+                }
+                return true
+            }
+            if status == .off {
+                chatExited(id)
+            } else if orca.report(id, status, pid: pid, cwd: cwd, transcript: transcript) {
+                lightsChanged()
+            }
+            return true
+        case let .end(id):
+            guard orca.chats[id] != nil else { return false }
+            chatExited(id)
+            return true
+        case let .forget(id):
+            guard let chat = orca.chats[id] else { return false }
+            if let slot = chat.slot { freeOrcaKey(slot) }
+            orca.forget(id)
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// A chat's process is gone: its tab was closed, or Orca stopped. Orca says which, a
+    /// moment later, since it drops a closed tab a moment after its process. A closed chat
+    /// stays on its key, dim (D-054).
+    private func chatExited(_ id: String) {
+        guard orca.exited(id), let slot = orca.chats[id]?.slot else { return }
+        dirty = true
+        let heard = orca.chats[id]?.heard
+        let ask: @MainActor () -> Void = { [weak self] in
+            self?.world.orca.place(id) { [weak self] result in
+                // A chat that reported since is running again.
+                guard let self, let chat = self.orca.chats[id], chat.slot == slot, chat.ended == nil, chat.heard == heard else { return }
+                switch result {
+                case .success(.some):
+                    self.log("chat \(Self.short(id))'s process ended, but Orca still has its tab: key \(slot + 1) stays lit")
+                case .success(nil):
+                    if self.orca.end(id) { self.lightsChanged() }
+                case let .failure(problem):
+                    self.log("could not ask Orca whether chat \(Self.short(id)) is still open (\(problem.text)): key \(slot + 1) counts it as closed")
+                    if self.orca.end(id) { self.lightsChanged() }
+                }
+                self.saveOrcaKeys()
+                self.flush()
+            }
+        }
+        let wait = world.orca.settle
+        if wait > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { MainActor.assumeIsolated { ask() } }
+        } else {
+            ask()
+        }
+    }
+
+    /// Orca's open Claude chats, as the answer to `orca.chats`, for the window and the panel
+    /// to choose from. Titles pass through: they are kept in memory for the chats on keys, and
+    /// never in the log or on file.
+    func orcaChats(done: @escaping @MainActor (String) -> Void) {
+        world.orca.chats { [weak self] result in
+            switch result {
+            case let .success(chats):
+                self?.orca.learn(titles: Dictionary(chats.map { ($0.id, $0.title) }) { first, _ in first })
+                done(Reply.orcaChats(chats))
+            case let .failure(problem): done(Reply.error(problem.text))
+            }
+        }
+    }
+
+    /// A key of Orca's layer by socket command: `orca.take` as a hold on an empty key,
+    /// `orca.free` as a hold on a taken one, `orca.show` as a tap's jump. `done` hears nil, or
+    /// why it did not happen.
+    func orcaCommand(_ command: Command, done: @escaping @MainActor (String?) -> Void) {
+        guard orcaLayer != nil else {
+            done(#"no layer is Orca's: give it one in the config, such as "layerApps": {"2": ["orca"]}"#)
+            return
+        }
+        switch command {
+        case let .orcaTake(slot, chat):
+            if orca.owner(of: slot) != nil {
+                done("key \(slot + 1) holds a chat already: free it first")
+            } else if let chat {
+                world.orca.place(chat) { [weak self] result in
+                    guard let self else { return }
+                    var problem: String?
+                    switch result {
+                    case let .success(place?): problem = self.put(place, on: slot)
+                    case .success(nil): problem = "Orca has no open Claude chat with that ID"
+                    case let .failure(failed): problem = failed.text
+                    }
+                    done(problem)
+                    self.flush()
+                }
+            } else {
+                takeChatOnScreen(slot, done: done)
+            }
+        case let .orcaFree(slot):
+            done(freeOrcaKey(slot) ? nil : "key \(slot + 1) holds no chat")
+        case let .orcaShow(slot):
+            guard let chat = orca.owner(of: slot) else {
+                done("key \(slot + 1) holds no chat")
+                return
+            }
+            showChat(chat.id, slot: slot, done: done)
+        default:
+            done("not a command for Orca's keys")
+        }
+    }
+
+    /// A key of Orca's layer was tapped or held. The keys are filled by hand (D-043): a hold on
+    /// an empty key takes the chat on screen in Orca, a hold on a taken key frees it, and a
+    /// tap does what `agentKeys.press` says with the key's chat.
+    private func orcaKey(_ slot: Int, _ trigger: String, layer: Int) {
+        let key = "key \(slot + 1) on layer \(layer)"
+        switch trigger {
+        case "hold":
+            if orca.owner(of: slot) != nil {
+                log("AG.hold \(key): the key lets its chat go")
+                freeOrcaKey(slot)
+            } else {
+                log("AG.hold \(key): the key takes the chat on screen in Orca")
+                takeChatOnScreen(slot) { _ in }
+            }
+        case "press":
+            guard let chat = orca.owner(of: slot) else {
+                log("AG.press \(key): no chat on this key. Hold it to take the chat on screen in Orca")
+                return
+            }
+            orcaTap(chat, slot: slot, layer: layer)
+        default:
+            break
+        }
+    }
+
+    /// Puts the chat on screen in Orca on that empty key. Orca's window says which tab shows,
+    /// and Orca's command line which chats there are. When that does not single one out the
+    /// key flashes red and the log says why.
+    private func takeChatOnScreen(_ slot: Int, done: @escaping @MainActor (String?) -> Void) {
+        // The window as it is at the hold, not when Orca has answered.
+        let tabs = world.orca.tabs()
+        world.orca.chats { [weak self] result in
+            guard let self else { return }
+            var problem: String?
+            switch result {
+            case let .failure(failed):
+                problem = failed.text
+            case let .success(chats):
+                switch Orca.pick(tabs: tabs, chats: chats) {
+                case let .unclear(why): problem = why
+                case let .chat(chat): problem = self.put(chat, on: slot)
+                }
+            }
+            if let problem {
+                self.log("key \(slot + 1) takes no chat: \(problem)")
+                self.flash(slot)
+            }
+            done(problem)
+            self.flush()
+        }
+    }
+
+    /// Nil when the key holds the chat now, or why it does not.
+    private func put(_ chat: OrcaChat, on slot: Int) -> String? {
+        if let other = orca.chats[chat.id]?.slot { return "that chat is on key \(other + 1) already" }
+        guard orca.take(slot: slot, chat: chat.id, status: chat.status, title: chat.title) else {
+            return "key \(slot + 1) holds a chat already"
+        }
+        lightsChanged()
+        saveOrcaKeys()
+        return nil
+    }
+
+    @discardableResult
+    private func freeOrcaKey(_ slot: Int) -> Bool {
+        guard orca.free(slot: slot) != nil else { return false }
+        lightsChanged()
+        saveOrcaKeys()
+        return true
+    }
+
+    /// A tap on a key that holds a chat. A closed chat's key ignores taps (D-054), unless Orca
+    /// has its tab open again, as after a restart of Orca.
+    private func orcaTap(_ chat: Session, slot: Int, layer: Int) {
+        let key = "key \(slot + 1) on layer \(layer)"
+        if chat.ended != nil {
+            world.orca.place(chat.id) { [weak self] result in
+                guard let self, let now = self.orca.owner(of: slot), now.id == chat.id, now.ended != nil else { return }
+                guard case let .success(place?) = result else {
+                    self.log("AG.press \(key): its chat is closed, the tap does nothing. Hold the key to free it")
+                    return
+                }
+                self.orca.reopen(chat.id)
+                self.lightsChanged()
+                self.saveOrcaKeys()
+                if let open = self.orca.owner(of: slot) { self.orcaTap(open, slot: slot, layer: layer, place: place) }
+                self.flush()
+            }
+            return
+        }
+        orcaTap(chat, slot: slot, layer: layer, place: nil)
+    }
+
+    private func orcaTap(_ chat: Session, slot: Int, layer: Int, place: OrcaChat?) {
+        let app = world.frontApp()
+        let actions = config.actions(for: "AG", "press", app: app)
+        log("AG.press key \(slot + 1) on layer \(layer) in \(app ?? "no app"): " + actions.map(\.description).joined(separator: ", "))
+        list: for action in actions {
+            switch action {
+            case .none, .pin, .pointerToChat, .lock:
+                // Nothing to pin: the key keeps its chat until it is freed. The pointer and
+                // the lock are the first layer's.
+                break
+            case .ack:
+                if orca.acknowledge(slot: slot) { dirty = true }
+            case .forget:
+                freeOrcaKey(slot)
+                break list
+            case .jump, .focus:
+                showChat(chat.id, slot: slot, place: place) { _ in }
+            default:
+                if runner.run(action, slot: slot, session: chat) { break list }
+            }
+        }
+    }
+
+    /// Brings the key's chat on screen in Orca. Orca says where the chat is open; with no tab
+    /// for it the chat is closed, and its key goes dim.
+    private func showChat(_ id: String, slot: Int, place known: OrcaChat? = nil, done: @escaping @MainActor (String?) -> Void) {
+        let show: @MainActor (OrcaChat) -> Void = { [weak self] place in
+            guard let self else { return }
+            self.world.orca.show(place) { [weak self] note in
+                self?.log("key \(slot + 1): chat \(Self.short(id)): \(note)")
+                done(nil)
+            }
+        }
+        if let known {
+            show(known)
+            return
+        }
+        world.orca.place(id) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .success(place?):
+                show(place)
+            case .success(nil):
+                if self.orca.end(id) { self.lightsChanged() }
+                self.saveOrcaKeys()
+                self.log("key \(slot + 1): Orca has no open tab for chat \(Self.short(id)): nothing to show")
+                done("its chat is closed")
+            case let .failure(problem):
+                self.log("key \(slot + 1): could not ask Orca where chat \(Self.short(id)) is: \(problem.text)")
+                done(problem.text)
+            }
+            self.flush()
+        }
     }
 
     // MARK: The session on screen
@@ -954,6 +1449,35 @@ public final class Daemon {
 
     // MARK: Layer
 
+    /// The layer the bridge acts on now: the pad's, while that is one of the bridge's own
+    /// (`layerApps`), and the first one on any other layer or before the pad has said.
+    private var actingLayer: Int {
+        guard let layer = padStatus?.layer, config.ownLayers.contains(layer) else { return LayerWatch.ours }
+        return layer
+    }
+
+    /// The layer `app` belongs to, when that is one of the bridge's own and not the one it
+    /// acts on now. Then the pad's controls do nothing in that app: the layer says which app
+    /// the pad is for.
+    private func otherLayer(of app: String?) -> Int? {
+        guard let app, let its = config.layer(ofApp: app), its != actingLayer else { return nil }
+        return its
+    }
+
+    /// Notes the layer the bridge acts on, and returns it when it changed. Then a push or a
+    /// hold begun on the other layer ends, and the keys are painted for this one.
+    private func layerActedOn() -> Int? {
+        let now = actingLayer
+        guard now != actedLayer else { return nil }
+        actedLayer = now
+        stopScrolling(why: "the pad changed layer")
+        gestures = Gestures()
+        holdTimer?.invalidate()
+        holdTimer = nil
+        dirty = true
+        return now
+    }
+
     /// Asks the pad which layer it is on. A tap on its touch sensor changes the layer without a
     /// word, and on every layer but the first its keys send this bridge nothing.
     private func checkLayer() {
@@ -975,6 +1499,7 @@ public final class Daemon {
         }
         guard self.pad === pad else { return }
         padStatus = status
+        let acting = layerActedOn()
         let before = sharing.reason
         let read = sharing.layer(status.layer, running: world.runningApps())
         if let pass = read.pass { passed(pass) }
@@ -985,6 +1510,19 @@ public final class Daemon {
         }
         let from = layers.layer
         let seen = layers.read(status.layer)
+        if let now = acting, status.layer == now, sharing.asideFor == nil {
+            let apps = config.apps(onLayer: now)
+            log("the pad is on layer \(now), one of the bridge's own: its keys and controls are for "
+                + (apps.isEmpty ? "no app in particular" : apps.joined(separator: ", ")))
+            // The first reading of a pad is where it starts, and `passed` has had its say.
+            if config.layerWarning, from != nil, read.pass == nil {
+                var names: [String] = []
+                for name in (config.layerApps[now] ?? []).map({ world.appName(config.apps[$0]?.first ?? $0) })
+                    where !names.contains(name) { names.append(name) }
+                notify(title: "Codex Micro is on layer \(now)",
+                       text: names.isEmpty ? "MicroBridge acts on its keys." : "Its keys are for \(names.joined(separator: " and ")).")
+            }
+        }
         switch seen {
         case let .away(layer) where sharing.hasKeys(on: layer):
             // No mishap: the pad's keys work on that layer, and `passed` said whose they are.

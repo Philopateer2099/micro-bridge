@@ -339,15 +339,26 @@ struct PadTab: View {
                 Divider().padding(.leading, 16)
                 LightRows(model: model)
             }
-            SectionTitle("Layout")
+            SectionTitle(onOrcasLayer == nil ? "Layout" : "Layout · the pad is on Orca's layer")
             PadCard {
-                PadDrawing(slots: model.bridge.slots, pulsing: model.bridge.pulsing, pinned: model.pinnedSlots,
+                // On Orca's layer the six keys are Orca's, as on the pad.
+                PadDrawing(slots: onOrcasLayer?.slots ?? model.bridge.slots,
+                           pulsing: onOrcasLayer == nil ? model.bridge.pulsing : [],
+                           pinned: onOrcasLayer == nil ? model.pinnedSlots : [],
+                           dim: Set(onOrcasLayer?.keys.filter(\.closed).map(\.slot) ?? []),
                            color: { Color(rgb: model.rgb($0)) }, faces: model.faces, names: model.keyNames,
                            tapped: { _, slot in
-                               if let slot, let session = model.session(onSlot: slot) { model.open(session) }
+                               guard let slot else { return }
+                               if let orca = onOrcasLayer {
+                                   if orca.key(slot)?.closed == false { model.orcaShow(slot: slot) }
+                               } else if let session = model.session(onSlot: slot) {
+                                   model.open(session)
+                               }
                            })
             }
-            SectionTitle("Agent Keys")
+            // The layer the pad is on comes first.
+            if onOrcasLayer != nil { orcaKeys }
+            SectionTitle(model.bridge.orca == nil ? "Agent Keys" : "Claude's keys · layer \(LayerWatch.ours)")
             Card {
                 Rows(items: Array(0 ..< 6)) { slot in
                     SessionLine(model: model, number: slot + 1, session: model.session(onSlot: slot))
@@ -363,6 +374,7 @@ struct PadTab: View {
                     }
                 }
             }
+            if onOrcasLayer == nil { orcaKeys }
             SectionTitle("Options")
             Card {
                 SettingRow(title: "Agent Keys", detail: "Which sessions the six keys show when more than six are open.") {
@@ -386,6 +398,26 @@ struct PadTab: View {
                 }
             }
         }
+    }
+
+    /// The six keys of Orca's layer, when Orca has a layer.
+    @ViewBuilder private var orcaKeys: some View {
+        if let orca = model.bridge.orca {
+            SectionTitle("Orca's keys · layer \(orca.layer)")
+            Card {
+                Rows(items: Array(0 ..< 6)) { slot in
+                    OrcaKeyLine(model: model, slot: slot, key: orca.key(slot))
+                }
+            }
+            Text("On layer \(orca.layer) a hold on an empty key takes the chat on screen in Orca, and a hold on a "
+                + "taken key frees it. A tap shows the key's chat. A key never changes by itself.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Orca's layer, while the pad is on it.
+    private var onOrcasLayer: OrcaSnapshot? {
+        model.bridge.orca.flatMap { $0.layer == model.bridge.layer ? $0 : nil }
     }
 
     private var inputMonitoring: (text: String, color: Color) {
@@ -463,6 +495,60 @@ struct SessionLine: View {
     private var badge: some View {
         let status = session?.status ?? .off
         return AgentCap(light: status == .off ? nil : Color(rgb: model.rgb(status)), glows: false, unit: 28)
+    }
+}
+
+/// One key of Orca's layer: the chat on it, or a menu to put one there.
+struct OrcaKeyLine: View {
+    @ObservedObject var model: BridgeModel
+    var slot: Int
+    var key: OrcaKeyRow?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AgentCap(light: light, glows: false, unit: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(key.map(model.orcaTitle) ?? "Key \(slot + 1)")
+                    .font(.system(size: 13, weight: key == nil ? .regular : .medium))
+                    .foregroundStyle(key == nil ? Color.secondary : Color.primary)
+                    .lineLimit(1)
+                if let key {
+                    Text("Key \(slot + 1) · " + (key.closed ? "closed in Orca" : key.status.label))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help(key.closed ? "Its tab was closed in Orca. The key stays dim until you free it." : "")
+                }
+            }
+            Spacer(minLength: 8)
+            if let key {
+                if !key.closed {
+                    Button("Show") { model.orcaShow(slot: slot) }
+                        .help("Brings this chat on screen in Orca, as a tap on the key does.")
+                }
+                Button("Free") { model.orcaFree(slot: slot) }
+                    .help("The key lets this chat go, as a hold on the key does. The chat stays open in Orca.")
+            } else {
+                Menu("Put a chat here") {
+                    Button("The chat on screen in Orca") { model.orcaTake(slot: slot) }
+                    if !model.orcaChatsOffKeys.isEmpty { Divider() }
+                    ForEach(model.orcaChatsOffKeys, id: \.id) { chat in
+                        Button(chat.title) { model.orcaTake(slot: slot, chat: chat.id) }
+                    }
+                }
+                .fixedSize()
+                .help("As a hold on the empty key does, or pick one of the Claude chats open in Orca.")
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+
+    /// A closed chat's key is dim, as on the pad.
+    private var light: Color? {
+        guard let key else { return nil }
+        return key.closed ? Color(rgb: model.rgb(.idle)).opacity(0.25) : Color(rgb: model.rgb(key.status))
     }
 }
 
@@ -772,6 +858,11 @@ struct LightRows: View {
 struct BehaviorTab: View {
     @ObservedObject var model: BridgeModel
 
+    /// The layer that is ChatGPT's, or the one it would get.
+    private var chatGPTLayer: Int {
+        model.chatGPTLayer ?? (model.orcaLayer == 2 ? 3 : 2)
+    }
+
     var body: some View {
         Page(title: "Behavior", subtitle: "How sessions get keys, and what the bridge warns you about.") {
             Card {
@@ -818,7 +909,9 @@ struct BehaviorTab: View {
                 }
                 Divider().padding(.leading, 16)
                 SettingRow(title: "Warn when the pad is on another layer",
-                           detail: "On any layer but the first, the pad's keys do not reach the bridge.") {
+                           detail: model.orcaLayer == nil
+                               ? "On any layer but the first, the pad's keys do not reach the bridge."
+                               : "On a layer that is neither Claude's nor Orca's, the pad's keys do not reach the bridge.") {
                     Toggle("", isOn: Binding(
                         get: { model.config.layerWarning },
                         set: { model.set(.bool($0), at: ["layerWarning"]) }
@@ -856,27 +949,40 @@ struct BehaviorTab: View {
                     )).labelsHidden().toggleStyle(.switch)
                 }
                 Divider().padding(.leading, 16)
+                SettingRow(title: "Orca's chats have a layer of their own",
+                           detail: model.orcaLayer.map { layer in
+                               "Layer \(layer) is Orca's: its six keys hold the chats you put on them, and the "
+                                   + "controls act in Orca. The pad's profile in Work Louder Input needs that layer."
+                           } ?? "Gives Orca layer 2. Its six keys hold the Claude chats you put on them, and on "
+                               + "that layer the controls act in Orca. The pad's profile in Work Louder Input "
+                               + "needs a layer for it.") {
+                    Toggle("", isOn: Binding(
+                        get: { model.orcaLayer != nil },
+                        set: { model.setOrcaLayer($0) }
+                    )).labelsHidden().toggleStyle(.switch)
+                }
+                Divider().padding(.leading, 16)
                 SettingRow(title: model.config.layerKeys
-                    ? "One tap passes the pad to ChatGPT" : "Two taps pass the pad to ChatGPT",
+                    ? "A tap passes the pad to ChatGPT" : "Two taps pass the pad to ChatGPT",
                     detail: model.config.layerKeys
-                        ? "Tap the pad's touch sensor to go to layer 2: ChatGPT drives the pad there. "
-                        + "Tap again to come back to layer 1: MicroBridge drives it. The app in front "
-                        + "does not matter."
-                        : "Tap the pad's touch sensor to go to layer 2, wait for the notification, "
+                        ? "Tap the pad's touch sensor to go to layer \(chatGPTLayer): ChatGPT drives the pad "
+                        + "there. " + (model.orcaLayer == nil
+                            ? "Tap again to come back to layer 1: MicroBridge drives it. "
+                            : "Each tap goes one layer on, and after the last layer comes layer 1. ")
+                        + "The app in front does not matter."
+                        : "Tap the pad's touch sensor to go to layer \(chatGPTLayer), wait for the notification, "
                         + "then tap again to come back. From then on ChatGPT drives the pad, and the "
                         + "same two taps give it back. Until then MicroBridge drives it, whatever "
                         + "app is in front.") {
                     Toggle("", isOn: Binding(
-                        get: { model.config.layers[2] == PadSharing.chatGPT },
-                        set: { on in
-                            model.set(on ? .string(PadSharing.chatGPT) : nil, at: ["layers", "2"])
-                        }
+                        get: { model.chatGPTLayer != nil },
+                        set: { model.setChatGPTLayer($0) }
                     )).labelsHidden().toggleStyle(.switch)
                 }
                 Divider().padding(.leading, 16)
-                SettingRow(title: "Layer 2 has the pad's keys too",
-                           detail: "Turn this on after you put the Codex keys on layer 2 with Work Louder "
-                               + "Input. Then one tap is enough: the layer the pad is on says who drives it.") {
+                SettingRow(title: "Layer \(chatGPTLayer) has the pad's keys too",
+                           detail: "Turn this on after you put the Codex keys on layer \(chatGPTLayer) with Work "
+                               + "Louder Input. Then no second tap is needed: the layer the pad is on says who drives it.") {
                     Toggle("", isOn: Binding(
                         get: { model.config.layerKeys },
                         set: { model.set(.bool($0), at: ["layerKeys"]) }
@@ -1032,8 +1138,11 @@ struct SetupTab: View {
             var parts = ["Connected over \(bridge.transport ?? "USB")."]
             if let firmware = bridge.firmware { parts.append("Firmware \(firmware).") }
             if let battery = bridge.battery { parts.append("Battery \(battery)%" + (bridge.charging == true ? ", charging." : ".")) }
-            let away = bridge.layer.map { $0 != LayerWatch.ours } ?? false
+            let away = bridge.layer.map { !model.config.isOwn(layer: $0) } ?? false
             if away { parts.append("It is on layer \(bridge.layer ?? 0), where its keys are off.") }
+            if let layer = bridge.layer, !away, layer != LayerWatch.ours {
+                parts.append("It is on layer \(layer), one of MicroBridge's own.")
+            }
             list.append(Check(mark: away ? .warning : .good, title: "Pad", detail: parts.joined(separator: " ")))
         } else if bridge.running {
             list.append(Check(mark: .warning, title: "Pad", detail: "Not connected. Plug it in with its USB cable."))

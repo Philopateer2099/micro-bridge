@@ -38,11 +38,22 @@ public enum ClaudeHook {
 
     /// The line to send the daemon for this payload, or nil when there is nothing to send.
     /// `environment` is the hook's own, inherited from Claude Code: it names the Claude app
-    /// session this session lives in, when it lives in one.
-    public static func request(for payload: JSONValue, pid: Int?, environment: [String: String] = [:]) -> String? {
+    /// session or the Orca chat this session lives in, when it lives in one. `nested` says
+    /// that Claude Code was itself started by another Claude Code, as a command a session ran.
+    public static func request(for payload: JSONValue, pid: Int?, environment: [String: String] = [:],
+                               nested: Bool = false) -> String? {
         guard !isLeftAlone(environment) else { return nil }
-        guard let session = payload["session_id"]?.string, !session.isEmpty,
+        guard var session = payload["session_id"]?.string, !session.isEmpty,
               let status = status(for: payload) else { return nil }
+        let host = SessionHost(environment: environment)
+        if let chat = host?.orcaChat {
+            // A chat in Orca is known by Orca's ID, which it keeps across /clear (D-053). A
+            // Claude Code that the chat's own session started inherits that ID, and is not the chat.
+            guard !nested else { return nil }
+            // /clear ends Claude's session and the chat stays open.
+            if status == .off, payload["reason"]?.string == "clear" { return nil }
+            session = chat
+        }
         if status == .off {
             return JSONValue.object([("op", .string("end")), ("session", .string(session))]).serialized
         }
@@ -51,7 +62,7 @@ public enum ClaudeHook {
         ]
         if let pid { pairs.append(("pid", .number(Double(pid)))) }
         if let cwd = payload["cwd"]?.string { pairs.append(("cwd", .string(cwd))) }
-        if let host = SessionHost(environment: environment) { pairs.append(("host", .string(host.description))) }
+        if let host { pairs.append(("host", .string(host.description))) }
         // The daemon reads the record to notice a turn stopped by hand, which fires no hook.
         if let record = payload["transcript_path"]?.string, record.hasPrefix("/"), record.utf8.count <= 2048 {
             pairs.append(("transcript", .string(record)))
@@ -84,13 +95,20 @@ public enum ProcessTree {
 
     /// The nearest ancestor of this process that is Claude Code.
     public static func claudeCodeAncestor() -> Int? {
+        claudeCodeAncestors().first
+    }
+
+    /// Every ancestor of this process that is Claude Code, nearest first. More than one: this
+    /// Claude Code was started by a command another Claude Code ran.
+    public static func claudeCodeAncestors() -> [Int] {
+        var found: [Int] = []
         var pid = getppid()
-        for _ in 0 ..< 8 where pid > 1 {
-            if let path = path(of: pid), isClaudeCode(path: path) { return Int(pid) }
-            guard let next = parent(of: pid) else { return nil }
+        for _ in 0 ..< 24 where pid > 1 {
+            if let path = path(of: pid), isClaudeCode(path: path) { found.append(Int(pid)) }
+            guard let next = parent(of: pid) else { break }
             pid = next
         }
-        return nil
+        return found
     }
 
     public static func isAlive(_ pid: Int) -> Bool {

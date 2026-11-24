@@ -196,7 +196,7 @@ build log are in [docs/development-log.md](docs/development-log.md).
 
 Built from 2026-11-10 against a real pad on firmware v0.6.1 (0.6.3 since 2026-11-22). Each
 behavior below was checked on the hardware or in the daemon's log, and the fixes are covered
-by the test suite (276 tests).
+by the test suite (343 tests).
 
 - **Mapping the pad.** Every key, the dial and the stick were captured through the daemon. The
   wide bottom key sits on two switches and sends two events about 6 ms apart. The dial sends
@@ -280,7 +280,10 @@ does. Every action and setting: [docs/configuration.md](docs/configuration.md).
 Limits to know about: buttons in the Claude app are found by their accessibility labels and
 class names, so a Claude app update can rename them. A session in a terminal gets a key and a
 light, and a tap brings the app forward, not the tab. A Claude Code session started in an Orca
-terminal is left alone on purpose.
+terminal is left alone on purpose. A Claude chat in Orca's chat view gets a key only on a layer
+you give Orca, and only when you put it there
+([docs/configuration.md](docs/configuration.md#orcas-layer)). A panel for Orca's sidebar that
+shows those keys is in [orca-plugin/](orca-plugin/README.md).
 
 To report a security problem: [SECURITY.md](SECURITY.md).
 
@@ -288,7 +291,8 @@ To report a security problem: [SECURITY.md](SECURITY.md).
 
 ```sh
 swift build
-scripts/test           # 276 tests; plain `swift test` works when Xcode is installed
+scripts/test           # 343 tests; plain `swift test` works when Xcode is installed
+scripts/test-plugin    # the Orca panel's 11 tests; needs Orca's command line
 scripts/micro listen   # print every key, dial and stick event
 scripts/micro paint    # light the six Agent Keys in six states
 scripts/micro app --demo   # the window with made-up sessions; it writes nothing

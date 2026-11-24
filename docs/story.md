@@ -183,3 +183,67 @@ The same hour I had Claude make GitHub hide my email. GitHub's own merge of a pu
 Turning point: the red run on GitHub's own machine. Until then the failure could have been my Mac or Claude's shell.
 
 Cost: my GitHub profile shows no email now. Nothing on GitHub's side keeps the private history out of the public repo. A guard in my working folder does that.
+
+## 14. Orca, talked through first
+
+Decisions: D-043 to D-049
+
+I wanted Orca on the pad, but not the way Claude is. In Claude the keys follow my sessions by themselves. In Orca I want to put each agent on a key myself, and I want it to stay there until I take it off. So before any code we talked it through, one question at a time.
+
+A key holds one agent tab. I put it there with a hold on the pad or from a panel in Orca, and only I can free it. If the workspace I am looking at has several agents, the key flashes and I pick in the panel, because Orca cannot say which tab I am looking at. If I close a tab, its key goes dim, and a tap brings the conversation back.
+
+Turning point: Claude first designed the controls for agents in a terminal, because the one agent open in my Orca that day ran in one. I do not use terminals. I use the Claude desktop app and Orca's chat, so the controls in Orca's chat do what they do in the Claude app. I also turned down Claude's advice on layers. I want them isolated: on Orca's layer the controls work in Orca, on Claude's layer in the Claude app, and other apps get the same general actions on both. The settings go in both places, the MicroBridge window and the Orca panel.
+
+Cost: this is a bigger build than one more app in a list, and Claude's layer changes too. Nothing is proven on a real Orca chat yet. The permission prompt is unseen, and reopening a closed chat is untested. To look without touching the Orca I work in, Claude started a second copy in Orca's own test mode with a throwaway home. It runs without a window. It has no Claude sign-in, and with a window it stopped on a keychain dialog, so the real prompt will be checked in my own Orca when I say so.
+
+## 15. Two layers that stay apart
+
+Decisions: D-050 to D-055
+
+I asked for layers that stay apart: Claude on one, Orca on another. To build that, the bridge first had to know which apps belong to which layer. That is one new setting, layerApps. Layer 1 is Claude's and the terminals'. Any other layer named there is one the bridge drives itself, with six Agent Keys of its own. Orca's layer is layer 2.
+
+Then the rule I asked for. While the pad is on one of these layers, a key, the dial or the stick does nothing when the app in front belongs to the other layer. An Agent Key is never stopped, because it brings its own app forward and is the way across from the pad. An app on no layer gets its usual action on both layers. The pad says nothing when a tap changes its layer, so the bridge now asks it four times a second.
+
+Turning point: Claude tried the hook in my own Orca and found that every Orca chat already fired it. One chat took a key from a real Claude session. So a chat is now known by Orca's own ID, which is in the chat's environment, and it belongs to Orca's layer. It never takes a key on Claude's layer. The same hook now tells Orca's layer working, needs-you and done, with no plugin and no polling.
+
+Turned down: in the talk before, a tap on a dim key was to bring a closed chat back. Claude looked for a way in my Orca: the command line, the new-tab menu, the search, the menu bar and the plugin method. None of them reopens a closed chat as a chat. So I decided that a dim key ignores taps and a hold frees it.
+
+Cost: a tap that changes the layer takes up to a quarter second to count, and the pad answers four small requests a second all day. On Claude's layer with Orca in front, the dial's hold and a key bound to lock do nothing now. The pad's three-layer profile had to wait in Work Louder Input, saved and not active, until the build that knows Orca's layer was installed, so that the profile, the build and the config changed together.
+
+## 16. Chats on keys, by hand
+
+Decisions: D-056 to D-060
+
+With the layer in place, the keys of Orca's layer had to be filled, shown and freed by hand.
+
+A hold on an empty key takes the chat I am looking at. We had assumed Orca cannot say which tab is on screen. Its command line cannot, but its window can. So the bridge reads the tabs of Orca's window and matches the one showing to Orca's list of chats, by title. When that does not single out one chat, the key flashes red twice and I pick in the panel. A hold on a taken key frees it. On this layer the hold always means that, whatever my settings say, and there is no double tap. A tap shows the chat: the bridge asks Orca where it is open, brings Orca forward, activates the workspace and presses the tab with the chat's title.
+
+Turning point: a chat's process ending is not its tab closing. Orca keeps the tab while the process is gone, and after Orca restarts the tab is back before the chat says anything. Dimming on the process alone would have dimmed the keys of chats that are still open, and a dim key ignores taps. So when a process ends the bridge asks Orca a moment later whether the tab is still there, and only a closed tab dims its key. For the same reason the hook sends nothing when I type /clear in a chat, and nothing from a Claude Code that a chat started itself. Both carry the chat's ID and would have dimmed or changed its key.
+
+Orca also went into the built-in config as an app group. Approve and Decline press Allow and Deny on a chat's permission card. Orca gets a layer only when my own file names one, because only I can put the pad's keys on a layer.
+
+Turned down: Return as a fallback for Approve in Orca. With no card on screen it would send the message I was typing.
+
+Cost: a hold and a jump need Accessibility and Orca's command line, and take a third to half a second. Tabs carry no ID, so the match is by title, and two chats with one title cannot be told apart. The keys are saved with Orca's IDs and states only.
+
+Still open: all of this was tried on my real Orca through the bridge's socket, and it works there. From the pad's own keys it is not tried yet.
+
+## 17. A front page, a window and a panel
+
+Decisions: D-061 to D-066
+
+Three things that people look at changed: the README, the MicroBridge window, and a new panel inside Orca.
+
+I said the README looked like a word dump. It is a front page now: the pad's picture, the lights, the controls and the install commands. The long parts moved to docs/ word for word. Nothing was removed.
+
+The window got Orca. One switch on the Behavior screen gives Orca's chats layer 2 and moves ChatGPT to layer 3, because a layer is the bridge's own or another app's, not both. The Pad screen draws the six keys of the layer the pad is on. It lists Orca's keys with Show, Free and a menu that puts a chat on an empty key. For that menu the bridge now answers with Orca's open chats, and it remembers the title of each chat that is on a key.
+
+The panel is an Orca plugin that lives in this repository. A panel in Orca can reach only its own worker, and the worker runs with my account. So the worker asks the bridge over its socket for everything: the keys, the chats, and what the controls do in Orca. The plugin stores nothing. The bridge's own Orca commands always go to the Orca on this Mac, because the window it reads and the chats it hears from are on this Mac.
+
+Turning point: the panel can change what a command does in Orca, and the config file is the one store for that. So the bridge now writes the config file, where it only read it before. It does that with the same function the window uses, so the two screens follow one rule. Claude also first wrote the chat titles into the keys file. That went against an earlier decision, which keeps only Orca's IDs and states on disk, so the titles came out again. They stay in memory and out of the log.
+
+Turned down: a command over the socket that sets any setting. The worker editing the config file itself. A separate repository for the plugin.
+
+Cost: the bridge writes the config file for commands only, and only when asked over its socket. Loading the plugin asks me to approve a worker that runs code with my account. Chats on an Orca on another machine cannot be put on keys. After the bridge restarts, the key of a closed chat shows the start of its ID in place of its title.
+
+Still open: the panel passes Orca's own plugin tools, but it has never run inside a running Orca. The second copy of Orca that Claude tests in hung at start that night, because the Mac was short of memory. The new window has not been tried against the running bridge, because nothing was installed that night. The pad's own keys were untried that night. The morning after, Claude installed the build at my word, and on the pad the tap to Orca's layer, the hold that takes a chat and the tap on its key worked. Then I approved the panel's worker, and the panel showed that key in my own Orca.

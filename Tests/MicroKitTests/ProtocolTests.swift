@@ -842,10 +842,13 @@ import Testing
         #expect(SessionHost("claude:local_0a1b2c3d-1111-4222-8333-444455556666")
             == .claudeDesktop("local_0a1b2c3d-1111-4222-8333-444455556666"))
         #expect(SessionHost("claude:local_abc")?.description == "claude:local_abc")
+        // A chat in Orca, by Orca's session ID.
+        #expect(SessionHost("orca:0a1b2c3d-1111-4222-8333-444455556666") == .orcaChat("0a1b2c3d-1111-4222-8333-444455556666"))
+        #expect(SessionHost("orca:0a1b2c3d-1111")?.description == "orca:0a1b2c3d-1111")
         let long = String(repeating: "a", count: 65)
         for bad in ["", "claude", "claude:", "claude:local_", "claude:abc", "claude:local_a b", "claude:local_a&x=1",
                     "claude:local_a_b", "claude:local_\(long)", "claude:local_a;rm", "claude:local_$(x)",
-                    "claude:local_a/b", "orca:term_abc", "ghostty:term_a", "claude:local_é"] {
+                    "claude:local_a/b", "orca:", "orca:a b", "orca:a/b", "orca:$(x)", "orca:\(long)", "ghostty:term_a", "claude:local_é"] {
             #expect(SessionHost(bad) == nil, "\(bad)")
         }
     }
@@ -857,7 +860,7 @@ import Testing
         state.apply(.report(session: "a", status: .done, pid: 42, cwd: nil))
         #expect(state.owner(of: 0)?.host == .claudeDesktop("local_abc"))
         #expect(Reply.state(state, pad: nil).contains(#""pid":42,"host":"claude:local_abc"}"#))
-        for bad in ["claude:local_a b", "orca:term_abc"] {
+        for bad in ["claude:local_a b", "orca:a b", "ghostty:term_abc"] {
             #expect(throws: Command.Invalid.self, "\(bad)") {
                 try Command.parse(#"{"op":"report","session":"a","status":"working","host":""# + bad + "\"}")
             }

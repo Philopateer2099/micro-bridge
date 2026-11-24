@@ -11,9 +11,17 @@ import Foundation
 ///     {"op":"clear"}                             → {"ok":true}        (forget everything)
 ///     {"op":"state"}                             → {"ok":true,"connected":…,"slots":[…],"sessions":[…],"layer":…,"battery":…}
 ///     {"op":"subscribe"}                         → {"ok":true}, then one event object per line
+///     {"op":"orca.take","slot":2}                → {"ok":true}        (the key takes the chat on screen in Orca)
+///     {"op":"orca.take","slot":2,"session":"…"}  → {"ok":true}        (the key takes that chat, by Orca's session ID)
+///     {"op":"orca.free","slot":2}                → {"ok":true}
+///     {"op":"orca.show","slot":2}                → {"ok":true}        (as a tap on that key of Orca's layer)
+///     {"op":"orca.chats"}                        → {"ok":true,"chats":[{"session":"…","title":"…","status":"done","worktree":"…"}]}
+///     {"op":"commands","target":"orca"}          → {"ok":true,"commands":[{"name":"APPR","title":"Approve","controls":["Key 8"],"here":{"press":["…"]},"elsewhere":{"press":["…"]}}]}
+///     {"op":"command.set","name":"APPR","target":"orca","actions":["…"]}  → {"ok":true}  (written to the config file; "trigger" is optional)
 ///
 /// `report` is how agents show up: the daemon gives each session its own Agent Key. It may
-/// carry `"host":"claude:local_…"`, which is where a jump goes.
+/// carry `"host":"claude:local_…"`, which is where a jump goes. With `"host":"orca:<id>"` the
+/// session is a chat in Orca: it belongs to Orca's layer, whose keys are filled by hand.
 public enum Command: Sendable, Equatable {
     case report(session: String, status: AgentStatus, pid: Int?, cwd: String?, host: SessionHost? = nil,
                 transcript: String? = nil)
@@ -27,6 +35,21 @@ public enum Command: Sendable, Equatable {
     case clear
     case state
     case subscribe
+    /// A key of Orca's layer takes a chat: the one named by Orca's session ID, or with nil
+    /// the chat on screen in Orca, as a hold on the empty key does.
+    case orcaTake(slot: Int, chat: String? = nil)
+    /// That key of Orca's layer lets its chat go.
+    case orcaFree(slot: Int)
+    /// As a tap on that key of Orca's layer: its chat comes on screen.
+    case orcaShow(slot: Int)
+    /// Asks which Claude chats are open in Orca, for the screens that put them on keys.
+    case orcaChats
+    /// Asks what the commands do in one target (an app group, a bundle id or "default"), for
+    /// the panel in Orca.
+    case commands(target: String)
+    /// Sets what a command does on one trigger in one target, in the config file. No actions
+    /// removes that part.
+    case commandSet(name: String, target: String, trigger: String = "press", actions: [String])
 
     public struct Invalid: Error, Equatable, CustomStringConvertible {
         public let description: String
@@ -49,14 +72,36 @@ public enum Command: Sendable, Equatable {
             }
             return id
         }
+        func target() throws(Invalid) -> String {
+            guard let target = value["target"]?.string, !target.isEmpty, target.utf8.count <= 128,
+                  target.unicodeScalars.allSatisfy({ $0.value > 0x20 && $0.value != 0x7F }) else {
+                throw Invalid(description: "\"target\" must be an app group, a bundle id or \"default\"")
+            }
+            return target
+        }
         switch op {
+        case "commands": return .commands(target: try target())
+        case "command.set":
+            guard let name = value["name"]?.string?.uppercased(), (1 ... 24).contains(name.count),
+                  name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+-_".contains($0)) }) else {
+                throw Invalid(description: "\"name\" must be a command's name")
+            }
+            let trigger = value["trigger"]?.string ?? "press"
+            guard Config.triggers.contains(trigger) else {
+                throw Invalid(description: "\"trigger\" must be one of: " + Config.triggers.joined(separator: ", "))
+            }
+            guard case let .array(items)? = value["actions"], items.count <= 32,
+                  items.allSatisfy({ ($0.string?.utf8.count ?? 4096) <= 2048 }) else {
+                throw Invalid(description: "\"actions\" must be a list of at most 32 actions")
+            }
+            return .commandSet(name: name, target: try target(), trigger: trigger, actions: items.compactMap(\.string))
         case "report":
             let pid = value["pid"]?.int
             if let pid, pid <= 1 { throw Invalid(description: "\"pid\" must be greater than 1") }
             var host: SessionHost?
             if let text = value["host"]?.string {
                 guard let parsed = SessionHost(text) else {
-                    throw Invalid(description: "\"host\" must be claude:local_<id>")
+                    throw Invalid(description: "\"host\" must be claude:local_<id> or orca:<id>")
                 }
                 host = parsed
             }
@@ -86,6 +131,18 @@ public enum Command: Sendable, Equatable {
         case "clear": return .clear
         case "state": return .state
         case "subscribe": return .subscribe
+        case "orca.chats": return .orcaChats
+        case "orca.take", "orca.free", "orca.show":
+            guard let slot = value["slot"]?.int, (0 ..< BridgeState.slotCount).contains(slot) else {
+                throw Invalid(description: "\"slot\" must be 0 to \(BridgeState.slotCount - 1)")
+            }
+            if op == "orca.free" { return .orcaFree(slot: slot) }
+            if op == "orca.show" { return .orcaShow(slot: slot) }
+            guard let wanted = value["session"], wanted != .null else { return .orcaTake(slot: slot) }
+            guard let id = wanted.string, SessionHost("orca:" + id) != nil else {
+                throw Invalid(description: "\"session\" must be an Orca session ID")
+            }
+            return .orcaTake(slot: slot, chat: id)
         default: throw Invalid(description: "unknown op \"\(op)\"")
         }
     }
@@ -121,13 +178,17 @@ public struct Session: Sendable, Equatable {
 public enum SessionHost: Sendable, Equatable, CustomStringConvertible {
     /// A Code session in the Claude desktop app, by its `local_…` id.
     case claudeDesktop(String)
+    /// A chat in Orca, by Orca's session ID. The chat keeps it across /clear.
+    case orcaChat(String)
 
-    /// Parses "claude:local_…". The id later goes into a link, so only plain id characters pass.
+    /// Parses "claude:local_…" and "orca:…". The id later goes into a link or a command line,
+    /// so only plain id characters pass.
     public init?(_ text: String) {
         guard let colon = text.firstIndex(of: ":") else { return nil }
         let id = String(text[text.index(after: colon)...])
         switch text[..<colon] {
         case "claude" where Self.isID(id, prefix: "local_", extra: "-"): self = .claudeDesktop(id)
+        case "orca" where Self.isID(id, prefix: "", extra: "-_"): self = .orcaChat(id)
         default: return nil
         }
     }
@@ -141,17 +202,30 @@ public enum SessionHost: Sendable, Equatable, CustomStringConvertible {
         self = host
     }
 
-    /// What an agent's own environment says about where it runs.
+    /// What an agent's own environment says about where it runs. A session of the Claude app
+    /// says so with `CLAUDE_CODE_HOST_SESSION_ID`. A chat in Orca has `ORCA_AGENT_SESSION_ID`
+    /// and no `ORCA_TERMINAL_HANDLE`, which Orca sets in its terminals only.
     public init?(environment: [String: String]) {
-        guard let id = environment["CLAUDE_CODE_HOST_SESSION_ID"], let host = SessionHost("claude:" + id) else {
-            return nil
+        if let id = environment["CLAUDE_CODE_HOST_SESSION_ID"] {
+            guard let host = SessionHost("claude:" + id) else { return nil }
+            self = host
+            return
         }
+        guard environment["ORCA_TERMINAL_HANDLE"]?.isEmpty != false, let id = environment["ORCA_AGENT_SESSION_ID"],
+              let host = SessionHost("orca:" + id) else { return nil }
         self = host
+    }
+
+    /// Orca's session ID, when this is a chat in Orca.
+    public var orcaChat: String? {
+        if case let .orcaChat(id) = self { return id }
+        return nil
     }
 
     public var description: String {
         switch self {
         case let .claudeDesktop(id): "claude:" + id
+        case let .orcaChat(id): "orca:" + id
         }
     }
 
@@ -253,7 +327,7 @@ public struct BridgeState: Sendable, Equatable {
             slots = [AgentStatus](repeating: .off, count: Self.slotCount)
             sessions = [:]
             reserved = nil
-        case .state, .subscribe: break
+        case .state, .subscribe, .orcaTake, .orcaFree, .orcaShow, .orcaChats, .commands, .commandSet: break
         }
         return slots != before
     }
@@ -659,6 +733,57 @@ public struct BridgeState: Sendable, Equatable {
 public enum Reply {
     public static let ok = JSONValue.object([("ok", .bool(true))]).serialized
 
+    /// The answer to "orca.chats": Orca's open Claude chats, by Orca's session ID.
+    public static func orcaChats(_ chats: [OrcaChat]) -> String {
+        JSONValue.object([
+            ("ok", .bool(true)),
+            ("chats", .array(chats.map { chat in
+                .object([("session", .string(chat.id)), ("title", .string(chat.title)),
+                         ("status", .string(chat.status.rawValue)), ("worktree", .string(chat.worktree))])
+            })),
+        ]).serialized
+    }
+
+    /// One command in the answer to "commands": the controls that run it, what it does in
+    /// the target asked about, and what it does where no app has an entry of its own.
+    public struct CommandRow: Sendable, Equatable {
+        public var name: String
+        /// What people call it, such as Approve. The name when it has no other.
+        public var title: String
+        /// The controls that run it, as the window names them.
+        public var controls: [String]
+        public var here: [(trigger: String, actions: [String])]
+        public var elsewhere: [(trigger: String, actions: [String])]
+
+        public init(name: String, controls: [String], here: [(trigger: String, actions: [String])],
+                    elsewhere: [(trigger: String, actions: [String])]) {
+            self.name = name
+            title = Config.commandTitles[name] ?? name
+            self.controls = controls
+            self.here = here
+            self.elsewhere = elsewhere
+        }
+
+        public static func == (first: CommandRow, second: CommandRow) -> Bool {
+            first.name == second.name && first.controls == second.controls
+                && first.here.elementsEqual(second.here, by: ==) && first.elsewhere.elementsEqual(second.elsewhere, by: ==)
+        }
+    }
+
+    public static func commands(_ rows: [CommandRow]) -> String {
+        func lists(_ lists: [(trigger: String, actions: [String])]) -> JSONValue {
+            .object(lists.map { ($0.trigger, .array($0.actions.map(JSONValue.string))) })
+        }
+        return JSONValue.object([
+            ("ok", .bool(true)),
+            ("commands", .array(rows.map { row in
+                .object([("name", .string(row.name)), ("title", .string(row.title)),
+                         ("controls", .array(row.controls.map(JSONValue.string))),
+                         ("here", lists(row.here)), ("elsewhere", lists(row.elsewhere))])
+            })),
+        ]).serialized
+    }
+
     public static func error(_ message: String) -> String {
         JSONValue.object([("ok", .bool(false)), ("error", .string(message))]).serialized
     }
@@ -674,8 +799,10 @@ public enum Reply {
         }
     }
 
+    /// `orca` is Orca's layer and the chats on its keys, when the config gives Orca a layer.
     public static func state(_ state: BridgeState, pad: PadInfo?, status: DeviceStatus? = nil,
-                             shown: [SessionHost] = [], access: Access? = nil) -> String {
+                             shown: [SessionHost] = [], access: Access? = nil,
+                             orca: (layer: Int, keys: OrcaKeys)? = nil) -> String {
         let sessions = state.sessions.values
             .sorted { ($0.slot ?? Int.max, $0.id) < ($1.slot ?? Int.max, $1.id) }
             .map { session -> JSONValue in
@@ -712,6 +839,22 @@ public enum Reply {
         if let access {
             pairs.append(("inputMonitoring", .string(access.inputMonitoring.rawValue)))
             pairs.append(("accessibility", .bool(access.accessibility)))
+        }
+        if let orca {
+            let keys = (0 ..< BridgeState.slotCount).compactMap { slot -> JSONValue? in
+                guard let chat = orca.keys.owner(of: slot) else { return nil }
+                var pairs: [(String, JSONValue)] = [
+                    ("slot", .number(Double(slot))), ("session", .string(chat.id)), ("status", .string(chat.status.rawValue)),
+                ]
+                if chat.ended != nil { pairs.append(("closed", .bool(true))) }
+                if let title = orca.keys.titles[chat.id] { pairs.append(("title", .string(title))) }
+                return .object(pairs)
+            }
+            pairs.append(("orca", .object([
+                ("layer", .number(Double(orca.layer))),
+                ("slots", .array(orca.keys.slots.map { .string($0.rawValue) })),
+                ("keys", .array(keys)),
+            ])))
         }
         return JSONValue.object(pairs).serialized
     }

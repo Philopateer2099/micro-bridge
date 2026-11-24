@@ -21,6 +21,56 @@ struct SessionRow: Identifiable, Equatable, Sendable {
     }
 }
 
+/// One key of Orca's layer as the bridge reports it.
+struct OrcaKeyRow: Identifiable, Equatable, Sendable {
+    /// 0 to 5.
+    var slot: Int
+    /// Orca's session ID of the chat on the key.
+    var chat: String
+    var status: AgentStatus
+    /// Its tab was closed in Orca: the key is dim until it is freed.
+    var closed = false
+    /// What Orca called the chat when the bridge last heard.
+    var title: String?
+
+    var id: Int { slot }
+}
+
+/// Orca's layer as the bridge reports it: which layer it is, and the chats on its six keys.
+struct OrcaSnapshot: Equatable, Sendable {
+    var layer: Int
+    var keys: [OrcaKeyRow] = []
+
+    init(layer: Int, keys: [OrcaKeyRow] = []) {
+        self.layer = layer
+        self.keys = keys
+    }
+
+    /// Nil when the bridge has no layer for Orca.
+    init?(reply: JSONValue?) {
+        guard let reply, let layer = reply["layer"]?.int else { return nil }
+        self.layer = layer
+        if case let .array(items)? = reply["keys"] {
+            keys = items.compactMap { item in
+                guard let slot = item["slot"]?.int, (0 ..< BridgeState.slotCount).contains(slot),
+                      let chat = item["session"]?.string,
+                      let status = AgentStatus(rawValue: item["status"]?.string ?? "") else { return nil }
+                return OrcaKeyRow(slot: slot, chat: chat, status: status, closed: item["closed"]?.bool == true,
+                                  title: item["title"]?.string)
+            }
+        }
+    }
+
+    func key(_ slot: Int) -> OrcaKeyRow? {
+        keys.first { $0.slot == slot }
+    }
+
+    /// What the six keys show.
+    var slots: [AgentStatus] {
+        (0 ..< BridgeState.slotCount).map { key($0)?.status ?? .off }
+    }
+}
+
 /// What the bridge answered to "state". `running` is false when it did not answer.
 struct BridgeSnapshot: Equatable, Sendable {
     var running = false
@@ -35,6 +85,8 @@ struct BridgeSnapshot: Equatable, Sendable {
     var layer: Int?
     var inputMonitoring: String?
     var accessibility: Bool?
+    /// Orca's layer and its keys, when the config gives Orca a layer.
+    var orca: OrcaSnapshot?
 
     init() {}
 
@@ -61,6 +113,7 @@ struct BridgeSnapshot: Equatable, Sendable {
         layer = reply["layer"]?.int
         inputMonitoring = reply["inputMonitoring"]?.string
         accessibility = reply["accessibility"]?.bool
+        orca = OrcaSnapshot(reply: reply["orca"])
     }
 
     /// Made-up sessions for screenshots and for trying the window without a bridge. They are
@@ -82,9 +135,9 @@ struct BridgeSnapshot: Equatable, Sendable {
     }()
 
     /// A made-up pad on USB that shows those sessions.
-    static func demo(_ sessions: BridgeState) -> BridgeSnapshot {
-        var demo = JSONValue.parse(Reply.state(sessions, pad: nil, shown: sessions.onScreen)).map(BridgeSnapshot.init(reply:))
-            ?? BridgeSnapshot()
+    static func demo(_ sessions: BridgeState, orca: (layer: Int, keys: OrcaKeys)? = nil) -> BridgeSnapshot {
+        var demo = JSONValue.parse(Reply.state(sessions, pad: nil, shown: sessions.onScreen, orca: orca))
+            .map(BridgeSnapshot.init(reply:)) ?? BridgeSnapshot()
         demo.connected = true
         demo.transport = "USB"
         demo.firmware = "v0.6.1"
@@ -167,6 +220,9 @@ final class BridgeModel: ObservableObject {
     @Published private(set) var loginStart = LoginStart.unavailable
     /// Why the last change was not made.
     @Published var notice: String?
+    /// The Claude chats open in Orca, as the bridge lists them. They name the chats on Orca's
+    /// keys, and the others can be put on a key.
+    @Published private(set) var orcaChats: [OrcaChat] = []
 
     let files: BridgeFiles
     let isDemo: Bool
@@ -193,13 +249,17 @@ final class BridgeModel: ObservableObject {
     private var unsaved: String?
     private var saving: Task<Void, Never>?
     private var demoSessions = BridgeSnapshot.demoSessions
+    private var demoOrca: OrcaKeys?
+    private var demoLayer = LayerWatch.ours
+    private var askedOrca = Date.distantPast
+    private var askingOrca = false
 
     init(files: BridgeFiles = BridgeFiles(), demo: Bool = false) {
         self.files = files
         isDemo = demo
         file = defaults
         if demo {
-            bridge = .demo(demoSessions)
+            bridge = demoBridge()
             hookEvents = Self.hookEventsWanted
             loginStart = .on
             log = [
@@ -236,6 +296,7 @@ final class BridgeModel: ObservableObject {
             guard let self else { return }
             self.fetching = false
             if self.bridge != snapshot { self.bridge = snapshot }
+            if snapshot.orca != nil { self.refreshOrcaChats() } else if !self.orcaChats.isEmpty { self.orcaChats = [] }
             if self.hookEvents != hooks { self.hookEvents = hooks }
             if self.log != tail { self.log = tail }
             if self.loginStart != login { self.loginStart = login }
@@ -312,12 +373,20 @@ final class BridgeModel: ObservableObject {
     }
 
     /// Sends the bridge a command. When the bridge refuses, `notice` says why.
-    private func send(_ pairs: [(String, JSONValue)]) {
+    private func send(_ pairs: [(String, JSONValue)], timeout: TimeInterval = 1) {
         let line = JSONValue.object(pairs).serialized
         if isDemo {
             if let command = try? Command.parse(line) {
-                demoSessions.apply(command)
-                bridge = .demo(demoSessions)
+                switch command {
+                case let .orcaTake(slot, chat):
+                    if let found = orcaChatsOffKeys.first(where: { chat == nil || $0.id == chat }) {
+                        demoOrca?.take(slot: slot, chat: found.id, status: found.status, title: found.title)
+                    }
+                case let .orcaFree(slot): demoOrca?.free(slot: slot)
+                case .orcaShow: break
+                default: demoSessions.apply(command)
+                }
+                bridge = demoBridge()
             }
             return
         }
@@ -326,7 +395,7 @@ final class BridgeModel: ObservableObject {
             let problem = await Task.detached { () -> String? in
                 var refused: String?
                 do {
-                    try SocketClient.send(line, to: socket, timeout: 1) { reply in
+                    try SocketClient.send(line, to: socket, timeout: timeout) { reply in
                         if let answer = JSONValue.parse(reply), answer["ok"]?.bool == false {
                             refused = answer["error"]?.string ?? "the bridge refused"
                         }
@@ -363,6 +432,152 @@ final class BridgeModel: ObservableObject {
     func showStopped() {
         guard isDemo else { return }
         bridge = BridgeSnapshot()
+    }
+
+    // MARK: Orca
+
+    private func demoBridge() -> BridgeSnapshot {
+        var demo = BridgeSnapshot.demo(demoSessions, orca: demoOrca.map { (layer: 2, keys: $0) })
+        demo.layer = demoLayer
+        return demo
+    }
+
+    /// For screenshots: Orca has layer 2, with made-up chats on four of its keys, one of them
+    /// closed. `padThere` puts the pad on that layer.
+    func showOrca(padThere: Bool = false) {
+        guard isDemo else { return }
+        let made: [(String, AgentStatus)] = [
+            ("Fix the checkout total", .working), ("Write the release notes", .needsYou),
+            ("Rename the billing tables", .done), ("Review the login flow", .idle), ("Plan the search page", .idle),
+        ]
+        orcaChats = made.enumerated().map { index, chat in
+            OrcaChat(id: "demo-chat-\(index)", title: chat.0, worktree: "demo::/code/storefront", status: chat.1)
+        }
+        var keys = OrcaKeys()
+        for (slot, chat) in orcaChats.prefix(4).enumerated() {
+            keys.take(slot: slot, chat: chat.id, status: chat.status, title: chat.title)
+        }
+        keys.end(orcaChats[3].id)
+        orcaChats.remove(at: 3)
+        demoOrca = keys
+        demoLayer = padThere ? 2 : LayerWatch.ours
+        setChatGPTLayer(true)
+        setOrcaLayer(true)
+        bridge = demoBridge()
+    }
+
+    /// Asks the bridge for Orca's open chats, at most every few seconds: the bridge asks Orca.
+    private func refreshOrcaChats() {
+        guard !isDemo, !askingOrca, Date().timeIntervalSince(askedOrca) >= 4 else { return }
+        askingOrca = true
+        askedOrca = Date()
+        let socket = files.socket
+        Task { [weak self] in
+            let chats = await Task.detached(priority: .utility) { Self.fetchOrcaChats(socket: socket) }.value
+            guard let self else { return }
+            self.askingOrca = false
+            if self.orcaChats != chats { self.orcaChats = chats }
+        }
+    }
+
+    private nonisolated static func fetchOrcaChats(socket: String) -> [OrcaChat] {
+        var reply: JSONValue?
+        try? SocketClient.send(#"{"op":"orca.chats"}"#, to: socket, timeout: 6) { line in
+            reply = JSONValue.parse(line)
+            return false
+        }
+        return reply.map(orcaChats(reply:)) ?? []
+    }
+
+    /// The chats in the bridge's answer to "orca.chats".
+    nonisolated static func orcaChats(reply: JSONValue) -> [OrcaChat] {
+        guard reply["ok"]?.bool == true, case let .array(items)? = reply["chats"] else { return [] }
+        return items.compactMap { item in
+            guard let id = item["session"]?.string, let title = item["title"]?.string else { return nil }
+            return OrcaChat(id: id, title: title, worktree: item["worktree"]?.string ?? "",
+                            status: AgentStatus(rawValue: item["status"]?.string ?? "") ?? .idle)
+        }
+    }
+
+    /// What to call the chat on a key: its title in Orca, or the start of its ID while Orca
+    /// has not said.
+    func orcaTitle(_ key: OrcaKeyRow) -> String {
+        orcaChats.first { $0.id == key.chat }?.title ?? key.title ?? "Chat " + key.chat.prefix(8)
+    }
+
+    /// The open chats that are on no key.
+    var orcaChatsOffKeys: [OrcaChat] {
+        let taken = Set(bridge.orca?.keys.map(\.chat) ?? [])
+        return orcaChats.filter { !taken.contains($0.id) }
+    }
+
+    /// Puts a chat on an empty key of Orca's layer: `chat` by Orca's session ID, or the chat
+    /// on screen in Orca, as a hold on the key does.
+    func orcaTake(slot: Int, chat: String? = nil) {
+        var pairs: [(String, JSONValue)] = [("op", .string("orca.take")), ("slot", .number(Double(slot)))]
+        if let chat { pairs.append(("session", .string(chat))) }
+        askedOrca = .distantPast
+        send(pairs, timeout: 8)
+    }
+
+    /// The key lets its chat go, as a hold on a taken key does.
+    func orcaFree(slot: Int) {
+        send([("op", .string("orca.free")), ("slot", .number(Double(slot)))], timeout: 8)
+    }
+
+    /// Brings the key's chat on screen in Orca, as a tap on the key does.
+    func orcaShow(slot: Int) {
+        send([("op", .string("orca.show")), ("slot", .number(Double(slot)))], timeout: 8)
+    }
+
+    /// The layer the config gives Orca's chats, when it gives them one.
+    var orcaLayer: Int? {
+        config.layer(ofApp: Orca.bundleID).flatMap { $0 == LayerWatch.ours ? nil : $0 }
+    }
+
+    /// The layer on which the pad is ChatGPT's.
+    var chatGPTLayer: Int? {
+        config.layers.filter { $0.value == PadSharing.chatGPT }.keys.min()
+    }
+
+    /// Gives Orca layer 2, or takes its layer away. ChatGPT's layer moves out of the way and
+    /// back: a layer is the bridge's own or another app's, not both.
+    func setOrcaLayer(_ on: Bool) {
+        let orca = orcaLayer, chatGPT = chatGPTLayer
+        if on {
+            guard orca == nil else { return }
+            guard config.layerApps[2] == nil else {
+                notice = "Not done: layer 2 is given to other apps in the config file."
+                return
+            }
+            edit { file in
+                if chatGPT == 2 {
+                    file.set(nil, at: ["layers", "2"])
+                    file.set(.string(PadSharing.chatGPT), at: ["layers", "3"])
+                }
+                file.set(.array([.string("orca")]), at: ["layerApps", "2"])
+            }
+        } else if let orca {
+            edit { file in
+                file.set(nil, at: ["layerApps", String(orca)])
+                if let chatGPT, chatGPT == orca + 1 {
+                    file.set(nil, at: ["layers", String(chatGPT)])
+                    file.set(.string(PadSharing.chatGPT), at: ["layers", String(orca)])
+                }
+            }
+        }
+    }
+
+    /// Passes the pad to ChatGPT on the first layer the bridge does not drive itself, or
+    /// stops passing it.
+    func setChatGPTLayer(_ on: Bool) {
+        let now = chatGPTLayer
+        if on {
+            guard now == nil, let free = (2 ... 9).first(where: { config.layerApps[$0] == nil && config.layers[$0] == nil }) else { return }
+            set(.string(PadSharing.chatGPT), at: ["layers", String(free)])
+        } else if let now {
+            set(nil, at: ["layers", String(now)])
+        }
     }
 
     func session(onSlot slot: Int) -> SessionRow? {
@@ -445,7 +660,7 @@ final class BridgeModel: ObservableObject {
         if !bridge.connected {
             return NextStep(text: "The pad is not connected. Plug it in with its USB cable.")
         }
-        if let layer = bridge.layer, layer != LayerWatch.ours {
+        if let layer = bridge.layer, !config.isOwn(layer: layer) {
             return NextStep(text: "The pad is on layer \(layer), where its keys are off. Tap the touch sensor on its bottom-left edge.")
         }
         return nil
@@ -480,7 +695,7 @@ final class BridgeModel: ObservableObject {
     }
 
     /// Changes the file. A change the bridge would refuse is not written, and `notice` says why.
-    private func edit(_ change: (inout ConfigFile) -> Void) {
+    func edit(_ change: (inout ConfigFile) -> Void) {
         guard var next = file else {
             notice = "The config file is not valid JSON. Open it in an editor and fix it first."
             return
@@ -625,14 +840,6 @@ final class BridgeModel: ObservableObject {
 
     // MARK: Commands
 
-    /// Names people have for the commands the docs describe. The rest show their keycap name.
-    private static let titles: [String: String] = [
-        "APPR": "Approve", "REJ": "Decline", "NEW": "New chat", "SPLIT": "Fork", "MIC": "Mic", "CODEX": "Send",
-        "FAST": "Fast mode", "PLAN": "Permission mode", "FORWARD": "Next session", "BACK": "Previous session",
-        "SIDEBAR": "Sidebar", "NEXT": "Next answer", "PREV": "Previous answer", "PICK": "Pick answer",
-        "PADSETTINGS": "Open the config file", "LOCK": "Lock the Mac",
-    ]
-
     /// Commands that do something, by name.
     var commandNames: [String] {
         config.commands.filter { _, targets in targets.values.contains { $0.values.contains { !$0.isEmpty } } }
@@ -640,7 +847,7 @@ final class BridgeModel: ObservableObject {
     }
 
     func title(_ command: String) -> String {
-        Self.titles[command] ?? command
+        Config.commandTitles[command] ?? command
     }
 
     /// What goes on the drawing of each lower key, by the key's name in the file.
@@ -651,7 +858,7 @@ final class BridgeModel: ObservableObject {
     /// What goes on the drawing of a key.
     func legend(_ key: String) -> String {
         switch keycap(key).cap {
-        case let .command(name): Self.titles[name].map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? name
+        case let .command(name): Config.commandTitles[name].map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? name
         case .nothing: ""
         case .custom: "Custom"
         }

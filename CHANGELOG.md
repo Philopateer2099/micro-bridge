@@ -31,6 +31,28 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
 - **One tap instead (optional):** a profile imported with Work Louder Input can give layer 2
   the Codex keys too. With `"layerKeys": true` the layer the pad is on then says who has it:
   ChatGPT on layer 2, MicroBridge on layer 1.
+- **A second layer of MicroBridge's own (optional, for Orca):** `"layerApps": {"2":
+  ["com.stablyai.orca"]}` makes layer 2 a layer MicroBridge drives itself, on a pad that has the
+  Codex keys there. The layers are kept apart: on layer 1 the keys, the dial and the stick do
+  nothing in Orca, and on layer 2 nothing in the Claude app or a terminal. In any other app they
+  act on both layers. Layer 2's six Agent Keys are its own.
+- **Orca's chats on the keys of Orca's layer:** the six Agent Keys of the layer `layerApps`
+  gives Orca hold Claude chats from Orca's chat view, put there by hand. Hold an empty key and
+  it takes the chat whose tab shows in Orca; hold a taken key and it lets the chat go. A key
+  lights by what its chat is doing, in the colors of Claude's layer. A tap brings the chat on
+  screen: Orca comes forward, the chat's workspace opens and its tab is pressed. A chat whose
+  tab was closed stays on its key, dim: a tap does nothing and a hold frees the key. Approve
+  and Decline press "Allow" and "Deny" on a chat's permission card. A chat in Orca never takes
+  a key on Claude's layer. `micro orca` prints what the bridge sees of Orca. Tried on a real
+  Orca through the bridge's socket. On the pad the hold that takes a chat and the tap were
+  tried; the hold that frees a key and the dim key were not.
+- **Orca in the MicroBridge window:** Behavior has one switch that gives Orca layer 2 and moves
+  ChatGPT's layer to 3. Pad lists Orca's keys with each chat's title, "Show", "Free" and a menu
+  that puts a chat on an empty key, and its drawing shows the keys of the layer the pad is on.
+- **A MicroBridge panel in Orca** (`orca-plugin/`): the same six keys in Orca's right sidebar,
+  and what each command does while Orca is in front, changed there and saved to the config
+  file by the bridge. Tested with Orca's plugin tools and loaded into a running Orca, where it showed the pad's
+  keys; its buttons have not been pressed there yet.
 
 ### The other controls
 

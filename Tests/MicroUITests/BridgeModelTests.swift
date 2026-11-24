@@ -313,6 +313,124 @@ import Testing
         #expect(model.problems.isEmpty)
     }
 
+    // MARK: Orca
+
+    @Test func orcasKeysAreReadFromTheBridgesAnswer() throws {
+        let reply = try #require(JSONValue.parse("""
+        {"ok":true,"connected":true,"slots":["off","off","off","off","off","off"],"sessions":[],"layer":2,
+         "orca":{"layer":2,"slots":["off","working","off","idle","off","off"],"keys":[
+           {"slot":1,"session":"chat-one","status":"working","title":"Fix the build"},
+           {"slot":3,"session":"chat-two","status":"idle","closed":true},
+           {"slot":9,"session":"chat-three","status":"idle"}]}}
+        """))
+        let orca = try #require(BridgeSnapshot(reply: reply).orca)
+        #expect(orca.layer == 2)
+        #expect(orca.keys.map(\.slot) == [1, 3])
+        #expect(orca.key(1) == OrcaKeyRow(slot: 1, chat: "chat-one", status: .working, title: "Fix the build"))
+        #expect(orca.key(3)?.closed == true && orca.key(3)?.title == nil)
+        #expect(orca.key(0) == nil)
+        #expect(orca.slots == [.off, .working, .off, .idle, .off, .off])
+        // A bridge with no layer for Orca says nothing of it.
+        #expect(BridgeSnapshot(reply: try #require(JSONValue.parse(#"{"ok":true,"connected":true}"#))).orca == nil)
+    }
+
+    @Test func orcasChatsAreReadFromTheBridgesAnswer() throws {
+        let reply = try #require(JSONValue.parse("""
+        {"ok":true,"chats":[{"session":"chat-one","title":"Fix the build","status":"needs-you","worktree":"repo::/code/app"},
+                            {"session":"chat-two","title":"New chat","status":"something-new","worktree":""},
+                            {"title":"A chat with no ID"}]}
+        """))
+        #expect(BridgeModel.orcaChats(reply: reply) == [
+            OrcaChat(id: "chat-one", title: "Fix the build", worktree: "repo::/code/app", status: .needsYou),
+            OrcaChat(id: "chat-two", title: "New chat", worktree: "", status: .idle),
+        ])
+        #expect(BridgeModel.orcaChats(reply: try #require(JSONValue.parse(#"{"ok":false,"error":"Orca is not running"}"#))).isEmpty)
+    }
+
+    /// A key's row says the chat's title: Orca's when the chat is open, the one the bridge
+    /// kept when it is closed, and the start of the ID when neither is known.
+    @Test func aKeysRowNamesItsChat() {
+        let model = BridgeModel(demo: true)
+        model.showOrca(padThere: true)
+        let orca = model.bridge.orca
+        #expect(orca?.layer == 2 && model.bridge.layer == 2)
+        #expect(orca?.slots == [.working, .needsYou, .done, .idle, .off, .off])
+        #expect(orca?.key(3)?.closed == true)
+        #expect((0 ..< 4).compactMap { orca?.key($0) }.map(model.orcaTitle) == [
+            "Fix the checkout total", "Write the release notes", "Rename the billing tables", "Review the login flow",
+        ])
+        #expect(model.orcaTitle(OrcaKeyRow(slot: 5, chat: "0a1b2c3d-and-more", status: .idle)) == "Chat 0a1b2c3d")
+        #expect(model.orcaChatsOffKeys.map(\.title) == ["Plan the search page"])
+    }
+
+    /// The window's buttons on Orca's keys do what a hold and a tap do, by the bridge's rules.
+    @Test func theDemoTakesAndFreesOrcasKeys() throws {
+        let model = BridgeModel(demo: true)
+        model.showOrca()
+        let plan = try #require(model.orcaChatsOffKeys.first)
+
+        // A taken key takes nothing more.
+        model.orcaTake(slot: 0, chat: plan.id)
+        #expect(model.bridge.orca?.key(0)?.chat == "demo-chat-0")
+        model.orcaTake(slot: 4, chat: plan.id)
+        #expect(model.bridge.orca?.key(4)?.chat == plan.id)
+        #expect(model.bridge.orca?.key(4).map(model.orcaTitle) == "Plan the search page")
+        #expect(model.orcaChatsOffKeys.isEmpty)
+
+        // Freed, an open chat can be taken again, and a closed one is gone.
+        model.orcaFree(slot: 4)
+        #expect(model.bridge.orca?.key(4) == nil && model.orcaChatsOffKeys.map(\.id) == [plan.id])
+        model.orcaFree(slot: 3)
+        #expect(model.bridge.orca?.keys.map(\.slot) == [0, 1, 2])
+        // With no chat named, the key takes the chat on screen: here, the first one free.
+        model.orcaTake(slot: 5)
+        #expect(model.bridge.orca?.key(5)?.chat == plan.id)
+    }
+
+    /// What the Behavior tab's "Orca's chats have a layer of their own" switch writes. A layer
+    /// is the bridge's own or another app's, so ChatGPT's layer moves out of the way and back.
+    @Test func orcasLayerSwitchMovesChatGPTsLayerOutOfTheWay() throws {
+        let model = try model(config: #"{"layers": {"2": "com.openai.codex"}}"#)
+        #expect(model.orcaLayer == nil && model.chatGPTLayer == 2)
+
+        model.setOrcaLayer(true)
+        #expect(model.orcaLayer == 2 && model.chatGPTLayer == 3)
+        #expect(model.notice == nil && model.problems.isEmpty)
+        model.save()
+        let saved = try Config.load(model.files.config)
+        #expect(saved.layerApps[2] == ["orca"] && saved.layers == [3: PadSharing.chatGPT])
+
+        model.setOrcaLayer(false)
+        #expect(model.orcaLayer == nil && model.chatGPTLayer == 2)
+        model.save()
+        #expect(try Config.load(model.files.config).layerApps[2] == nil)
+        #expect(try Config.load(model.files.config).layers == [2: PadSharing.chatGPT])
+    }
+
+    @Test func chatGPTsSwitchTakesTheFirstLayerThatIsFree() throws {
+        let model = try model(config: "{}")
+        model.setOrcaLayer(true)
+        #expect(model.orcaLayer == 2 && model.chatGPTLayer == nil)
+        model.setChatGPTLayer(true)
+        #expect(model.chatGPTLayer == 3)
+        model.setChatGPTLayer(false)
+        #expect(model.chatGPTLayer == nil && model.config.layers.isEmpty)
+
+        // With no layer for Orca it is layer 2, as before.
+        model.setOrcaLayer(false)
+        model.setChatGPTLayer(true)
+        #expect(model.chatGPTLayer == 2 && model.problems.isEmpty)
+    }
+
+    /// Layer 2 given to other apps by hand is left as it is.
+    @Test func orcasLayerSwitchLeavesALayerGivenByHand() throws {
+        let model = try model(config: #"{"layerApps": {"2": ["com.apple.Notes"]}}"#)
+        model.setOrcaLayer(true)
+        #expect(model.orcaLayer == nil)
+        #expect(model.notice == "Not done: layer 2 is given to other apps in the config file.")
+        #expect(model.config.layerApps[2] == ["com.apple.Notes"])
+    }
+
     @Test func theKeysOnLayerTwoSwitchSetsLayerKeysAndClearsIt() throws {
         let model = try model()
         #expect(!model.config.layerKeys)

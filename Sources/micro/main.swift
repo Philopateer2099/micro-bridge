@@ -28,6 +28,9 @@ usage: micro <command> [--trace]
                   list the parts of an app's front window that scroll on their own, which is the
                   chat, and where pane:left and pane:right would move the pointer (moves nothing);
                   --names adds each pane's role and classes
+  orca [--titles]                what the bridge sees of Orca: its Claude chats, the tabs of the
+                                 workspace on screen, and the chat a hold on an empty key of Orca's
+                                 layer would take (changes nothing); --titles adds their titles
   record <file>                  say whether a Claude Code session record ends with a turn stopped by hand
   paint           light the six Agent Keys in six different states, left to right
   set <slot> <status>
@@ -41,7 +44,8 @@ usage: micro <command> [--trace]
                   output to ~/Library/Logs/micro-bridge.log
   ctl report <session> <status> [host]
                             tell the daemon what a session is doing (it picks the key);
-                            host is claude:local_<id>, where a jump goes
+                            host is claude:local_<id>, where a jump goes, or orca:<id> for a
+                            chat in Orca, which goes to the keys of Orca's layer
   ctl end <session>         tell the daemon a session is over (a Claude app session keeps its key,
                             so a press opens it again)
   ctl forget <session>      drop a session and free its key now
@@ -50,6 +54,11 @@ usage: micro <command> [--trace]
   ctl unpin <session>       take the pin away
   ctl set <slot> <status>   ask the daemon to light one Agent Key by hand
   ctl clear                 ask the daemon to turn all six off
+  ctl orca take <slot> [id] on Orca's layer, key 0 to 5 takes the chat on screen in Orca, as a
+                            hold on the empty key does, or the chat with that Orca session ID
+  ctl orca free <slot>      that key lets its chat go, as a hold on it does
+  ctl orca show <slot>      that key's chat comes on screen in Orca, as a tap on it does
+  ctl orca chats            Orca's open Claude chats, with their titles, for a key to take
   ctl state                 show what the daemon is showing, and whether the pad is connected
   ctl events                stream key, dial and joystick events from the daemon
   hook                      Claude Code hook: reads the hook's JSON on stdin and reports the
@@ -223,6 +232,10 @@ case "config":
             print("leaves the pad to these apps while one is in front: \(config.stepAsideFor.isEmpty ? "none" : config.stepAsideFor.joined(separator: ", "))")
             print("layers that pass the pad to another app: \(config.layers.isEmpty ? "none" : config.layers.sorted { $0.key < $1.key }.map { "\($0.key) to \($0.value)" }.joined(separator: ", "))")
             print("the pad's keys are on those layers too, so one tap passes the pad: \(config.layerKeys ? "yes" : "no")")
+            for layer in config.layerApps.keys.sorted() {
+                let names = config.layerApps[layer] ?? []
+                print("layer \(layer) is the bridge's own, for: \(names.isEmpty ? "no app in particular" : names.joined(separator: ", "))")
+            }
             print("wrong-layer notification: \(config.layerWarning ? "on" : "off")")
             print("low-battery notification: \(config.batteryWarning > 0 ? "at \(config.batteryWarning)%" : "off")")
             print("quiet time after a click: \(config.clickGuard > 0 ? "\(config.clickGuard) s" : "off")")
@@ -470,6 +483,11 @@ case "tree":
         fail("that box is not on screen")
     }
 
+case "orca":
+    // What the bridge sees of Orca, to say why a key took a chat or did not. Reads only.
+    guard args.count == 1 || (args.count == 2 && args[1] == "--titles") else { fail(usage) }
+    for line in Orca.look(titles: args.count == 2) { print(line) }
+
 case "record":
     // What the daemon reads to notice a turn stopped by hand.
     guard args.count == 2, let tail = Transcript.tail(of: args[1]) else { fail(usage) }
@@ -561,9 +579,10 @@ case "hooks":
 case "hook":
     // A hook must never slow down or break Claude Code: no output, short timeout, exit 0.
     let input = FileHandle.standardInput.readDataToEndOfFile()
+    let claudes = ProcessTree.claudeCodeAncestors()
     if input.count <= 4 << 20, let payload = JSONValue.parse(String(decoding: input, as: UTF8.self)),
-       let request = ClaudeHook.request(for: payload, pid: ProcessTree.claudeCodeAncestor(),
-                                        environment: ProcessInfo.processInfo.environment) {
+       let request = ClaudeHook.request(for: payload, pid: claudes.first,
+                                        environment: ProcessInfo.processInfo.environment, nested: claudes.count > 1) {
         try? SocketClient.send(request, timeout: 1) { _ in false }
     }
     exit(0)
@@ -611,6 +630,16 @@ case "ctl":
         guard args.count == 4, let slot = Int(args[2]) else { fail(usage) }
         request = object([("op", .string("set")), ("slot", .number(Double(slot))), ("status", .string(args[3]))])
     case "clear": request = object([("op", .string("clear"))])
+    case "orca":
+        if args.count == 3, args[2] == "chats" {
+            request = object([("op", .string("orca.chats"))])
+            break
+        }
+        guard args.count == 4 || (args.count == 5 && args[2] == "take"), ["take", "free", "show"].contains(args[2]),
+              let slot = Int(args[3]) else { fail(usage) }
+        var pairs: [(String, JSONValue)] = [("op", .string("orca." + args[2])), ("slot", .number(Double(slot)))]
+        if args.count == 5 { pairs.append(("session", .string(args[4]))) }
+        request = object(pairs)
     case "state": request = object([("op", .string("state"))])
     case "events":
         request = object([("op", .string("subscribe"))])

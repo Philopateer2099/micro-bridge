@@ -199,28 +199,14 @@ extension BridgeModel {
     // MARK: Lists of actions
 
     /// The actions in a binding as the file writes it: one action or a list. `none` is left out.
-    static func spellings(_ value: JSONValue?) -> [String] {
-        let texts: [String]
-        switch value {
-        case let .string(text)?: texts = [text]
-        case let .array(items)?: texts = items.compactMap(\.string)
-        default: texts = []
-        }
-        return texts.filter { Action.parse($0) != Action.none }
-    }
+    static func spellings(_ value: JSONValue?) -> [String] { ConfigFile.spellings(value) }
 
     /// One action is written as a string, several as a list.
-    static func binding(_ actions: [String]) -> JSONValue {
-        actions.count == 1 ? .string(actions[0]) : .array(actions.map(JSONValue.string))
-    }
+    static func binding(_ actions: [String]) -> JSONValue { ConfigFile.binding(actions) }
 
     /// A control or a command target as one list per trigger. An action or a list on its own
     /// is the press.
-    static func triggerLists(_ value: JSONValue?) -> [(trigger: String, actions: [String])] {
-        guard let value else { return [] }
-        if case let .object(pairs) = value { return pairs.map { ($0.0, spellings($0.1)) } }
-        return [("press", spellings(value))]
-    }
+    static func triggerLists(_ value: JSONValue?) -> [(trigger: String, actions: [String])] { ConfigFile.triggerLists(value) }
 
     func lists(of owner: ActionList.Owner) -> [(trigger: String, actions: [String])] {
         switch owner {
@@ -255,15 +241,9 @@ extension BridgeModel {
         case let .section(name):
             set(object, at: [name])
         case let .command(name, target):
-            var entry = commandEntry(name)
-            let value: JSONValue? = lists.isEmpty
-                ? nil : lists.count == 1 && lists[0].trigger == "press" ? Self.binding(lists[0].actions) : object
-            if let index = entry.firstIndex(where: { $0.0 == target }) {
-                if let value { entry[index].1 = value } else { entry.remove(at: index) }
-            } else if let value {
-                entry.append((target, value))
-            }
-            set(.object(entry), at: ["commands", commandKey(name)])
+            // The same rule the bridge uses for the panel in Orca.
+            let defaults = defaults
+            edit { $0.setCommand(name, target: target, trigger: list.trigger, actions: kept, defaults: defaults) }
         }
         return self.actions(in: list) == kept
     }
@@ -279,21 +259,13 @@ extension BridgeModel {
 
     /// The name the file itself has for a command. The bridge reads names in any case.
     private func commandKey(_ name: String) -> String {
-        if case let .object(pairs)? = file?.value(at: ["commands"]),
-           let own = pairs.first(where: { $0.0.uppercased() == name }) {
-            return own.0
-        }
-        return name
+        file?.commandKey(name) ?? name
     }
 
     /// A command as targets, whichever of its forms the file uses: an action, a list or an
     /// object of triggers is what it does everywhere.
     private func commandEntry(_ name: String) -> [(String, JSONValue)] {
-        guard let value = value(at: ["commands", commandKey(name)]).value else { return [] }
-        if case let .object(pairs) = value, pairs.isEmpty || !pairs.allSatisfy({ Config.triggers.contains($0.0) }) {
-            return pairs
-        }
-        return [("default", value)]
+        (file ?? defaults)?.commandEntry(name, defaults: defaults) ?? []
     }
 
     /// Every command: the ones on the pad, then the ones a person made, then the rest.
@@ -324,7 +296,7 @@ extension BridgeModel {
     /// Where a command can do something: the app groups, any app the file names for it, and
     /// "default" for every other app.
     func commandTargets(_ name: String) -> [String] {
-        func rank(_ group: String) -> Int { group == "claude" ? 0 : group == "terminal" ? 1 : 2 }
+        func rank(_ group: String) -> Int { ["claude", "terminal", "orca"].firstIndex(of: group) ?? 3 }
         var targets = config.apps.keys.sorted { (rank($0), $0) < (rank($1), $1) }
         for (target, _) in commandEntry(name) where target != "default" && !targets.contains(target) {
             targets.append(target)
@@ -336,6 +308,7 @@ extension BridgeModel {
         switch target {
         case "claude": "In the Claude app"
         case "terminal": "In a terminal"
+        case "orca": "In Orca"
         case "default": "Everywhere else"
         default: config.apps[target] == nil ? "In " + target : "In the \(target) apps"
         }

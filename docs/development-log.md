@@ -862,6 +862,394 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The panel loaded into the owner's Orca (2026-11-24 13:50 UTC), it shows the keys
+
+The owner said to load it, read what Orca would grant, and said to approve it. Every command
+carried `--environment local`.
+
+- `orca plugin dev load <the folder>` put the folder in Orca as `local.microbridge 0.1.0`,
+  pending. Orca named the grant: its own code in a separate Node.js process with the user
+  account's access to the machine, and one panel. The same command with `--approve` and the
+  fingerprint Orca printed made it run.
+- `orca plugin dev request local.microbridge pad.state` answered through the worker: the bridge
+  running, the pad connected, layer 2 as Orca's, key 1 with its chat and the chat's title, and
+  the 2 chats open in this Mac's Orca. `pad.commands` answered with 10 commands. So a worker
+  inside Orca can open the bridge's Unix socket, which had only been read from Orca's own words.
+- `orca plugin shot local.microbridge --panel pad` showed the panel in the right sidebar and
+  saved its picture: "Pad connected", "Layer 2 of the pad. The pad is on layer 3 now.", key 1
+  with its chat, Idle, Show 1 and Free 1, keys 2 to 6 empty with "Put a chat here", the closed
+  section "What the controls do in Orca", Refresh. `orca plugin logs` had no line from it.
+
+Not tried in the running Orca: a press on Show or Free, a chat put on a key from a menu, and
+Save in "What the controls do in Orca", which writes the owner's config file. A picture with
+that section opened was refused, because Orca presses a control for a picture only while its
+window is hidden.
+
+### The owner's finger test on Orca's layer (2026-11-24 13:42 UTC), works
+
+The owner did the test on the pad and said it worked. The bridge's log of those two minutes:
+
+- 13:40:47, 13:40:57, 13:41:45: taps on the touch sensor. The pad went to layer 2, to layer 3
+  and back to layer 2, and the bridge said whose each layer is. On layer 3 it kept the pad,
+  because ChatGPT was not open.
+- 13:42:04: `AG.hold key 1 on layer 2: the key takes the chat on screen in Orca`, then
+  `key 1 takes chat 564f669d (done)`.
+- 13:42:16: `AG.press key 1 on layer 2 in com.stablyai.orca: ack, jump, pane:chat`, then
+  `its tab is on screen already`.
+
+Not in the log, so not tried on the pad yet: a tap that shows a chat from another tab, the
+hold that frees a key (key 1 still holds the chat), the dim key, Approve and Decline on a
+permission card. The lights are the owner's word; the log does not show them.
+
+### The finished build was installed (2026-11-24 13:36 UTC), the bridge runs
+
+The owner plugged the pad in and said to install. `scripts/install` built the release from
+85feb80 and restarted the bridge.
+
+- The bridge started, loaded the owner's config (34 bindings) and found the pad over USB
+  through the helper, on layer 1.
+- The 6 Claude sessions from before the restart kept their keys.
+- The state answer names layer 2 as Orca's, with no chat on its keys.
+- The new socket commands answer: `orca.chats` lists the 2 chats open in this Mac's Orca, and
+  `commands` for `orca` lists 10 commands.
+
+Not tried yet: the pad's own keys on Orca's layer, the window opened again against this
+bridge, the panel inside Orca.
+
+### Orca in the MicroBridge window and a panel in Orca (2026-11-24 04:55 UTC), built, not in a running Orca yet
+
+Step 4 of the Orca build (D-062 to D-066, on D-044 and D-048). On the branch `orca-layer`, not
+pushed. The installed app is still the build of step 3, so none of this runs on the owner's
+Mac yet. The owner was asleep and had said to leave every running process alone.
+
+- **Window, Pad.** The drawing shows the six keys of the layer the pad is on. A new section,
+  "Orca's keys", lists each key with its chat's title, "Show", "Free", and on an empty key a
+  menu: the chat on screen in Orca, or one of Orca's open Claude chats. A closed chat's key is
+  dim in the list and in the drawing. Orca's section comes first while the pad is on its layer.
+- **Window, Behavior.** One switch, "Orca's chats have a layer of their own", writes
+  `layerApps.2 = ["orca"]` and moves a ChatGPT entry from `layers.2` to `layers.3`, and back
+  (D-064). The ChatGPT rows name the layer the file gives it. The old switch always wrote
+  `layers.2`, which the config check refuses once layer 2 is Orca's.
+- **Socket.** `orca.chats` lists Orca's open Claude chats. A key remembers its chat's title in
+  memory only, so the key of a closed chat can still be named; the keys file and the log hold
+  no title (D-063). `commands` lists what each command does in one app group, and
+  `command.set` writes one change to the config file (D-065). `micro ctl orca chats` asks the
+  first by hand.
+- **One rule for two screens.** `ConfigFile.setCommand` changes a command in the file. The
+  window calls it and so does the bridge, for the panel. The names of commands and controls
+  moved into MicroKit.
+- **This machine only.** The bridge takes `ORCA_ENVIRONMENT` and `ORCA_PAIRING_CODE` out of
+  the environment of Orca's command line, so it always asks the Orca on this Mac (D-062).
+- **Panel.** `orca-plugin/` is an Orca plugin: a panel in the right sidebar and a worker that
+  sends each request to the daemon's socket (D-066). It shows the six keys, takes, frees and
+  shows chats, and changes what a command does on a press in Orca. It stores nothing.
+
+What was tried:
+
+- `scripts/test`: 343 tests pass (326 before): PadWire 7, MicroUI 52, MicroKit 284. New ones
+  cover the titles (in the state answer, not in the file, not in the log), `orca.chats`, the
+  environment of Orca's command line, the layer switches, the demo keys, `setCommand` on a
+  file with and without its own command, and the two command operations on the daemon bench.
+- `scripts/test-plugin`: Orca's `plugin validate` says the manifest is valid; `plugin test`
+  passes 11 tests (the worker against a stand-in daemon on a Unix socket, the panel against a
+  stand-in worker); `plugin check` renders the panel with no refused call or dropped prop.
+- The two new window screens were drawn to pictures with `micro snapshot` and looked at.
+- `scripts/check-public`: no private data found.
+
+What was not tried, and why:
+
+- **The panel inside a running Orca.** A hidden sandbox Orca with its own data folder was
+  started for it, with a stand-in daemon. Its main thread hung at start: the Mac had 71 MB of
+  memory free and 10.3 of 11 GB of swap in use. It was stopped after two minutes, with its
+  helpers. Nothing was loaded into the owner's Orca: `orca plugin list` there shows no
+  MicroBridge plugin. So that a worker may open a Unix socket inside Orca is read from Orca's
+  own words for a `trusted-worker` ("its own code in a separate Node.js process … with your
+  user account's access") and from the test run, not seen in the app.
+- **The window against the running bridge.** The installed bridge is the step 3 build and
+  does not know `orca.chats`. Installing restarts the bridge, which the owner said not to do
+  tonight.
+- **The pad.** It has been unplugged since 03:57 UTC.
+- The plugin was not type-checked with `tsc`, which is not installed here. Orca strips the
+  types when it loads the files.
+
+Left as it is for the owner (04:57 UTC): the six keys of Orca's layer hold nothing. Key 1 was
+freed of the test chat with `ctl orca free 0`. One test chat stays open in the test
+workspace, so a hold on the pad has a chat to take; the other was closed in the dim test. The decisions of the build are told in
+chapters 15 to 17 of `docs/story.md`. Nothing was pushed, installed or restarted.
+
+### Step 3 tried on a real Orca through the socket (2026-11-24 04:05 UTC), works
+
+The owner said Orca was theirs to leave and mine to use for the night, on two conditions:
+this Mac only, and no running process touched. Everything below used two test chats of my own
+in a test workspace, started with `orca agent launch --environment local`, and the bridge's
+socket. The pad was unplugged, so no light was seen.
+
+- `ctl orca take 0 <id>` put a test chat on key 1; the log said so with the chat's state.
+- `ctl orca show 0` brought the chat's tab on screen, also from another workspace: the
+  workspace was activated, then the tab pressed.
+- `ctl orca free 0`, then `ctl orca take 0` with no ID, as a hold does: the key took the chat
+  on screen.
+- The hook's reports arrived under Orca's session ID, with the process, the folder and the
+  record.
+- Closing a chat's tab: within about 2 seconds the log said the chat was closed and its key
+  keeps it and goes dim, and the state answer had `"closed": true`.
+- Refusals read as written: a closed chat, a key that holds a chat already, a key that holds
+  none, a chat that is on another key already.
+- Seen and left as it is: when Claude's turn ends while a command it started still runs in the
+  background, the bridge says done and Orca says working until that command ends. And a chat
+  on no key is forgotten when its process exits, so a key that takes it later starts from
+  Orca's state with no process to watch.
+- Orca's view was put back to the chat the owner had on screen (three presses on "Go back"),
+  and checked.
+
+Not tried: anything from the pad's own keys.
+
+### The pad test of step 3 was set up (2026-11-24 00:45 UTC), nothing built
+
+The owner said yes to the setup, on one condition: everything stays on this Mac. Their Orca
+also shows work that runs on another Mac.
+
+- **Which machine.** Orca's `host list` names this machine `local`, and the other Mac is a
+  saved environment. The command line goes to this machine unless a command names an
+  environment or the shell has `ORCA_ENVIRONMENT` or `ORCA_PAIRING_CODE`. The bridge's own
+  calls name none, and the daemon's environment has neither variable. Every command of this
+  setup carried `--environment local`.
+- **Profile.** MicroBridge was stopped for 92 seconds. One click on the row "Three layers" in
+  Input set it active, and Input was quit after. The pad answered `profile_index` 2,
+  `layer_index` 1.
+- **Config.** The owner's file got `"layers": {"3": "com.openai.codex"}`,
+  `"layerApps": {"2": ["orca"]}` and an `orca` entry in its own `APPR` and `REJ`. The file from
+  before is `config.json.before-orca-layer`. `micro config check` said ok.
+- **Install.** `scripts/install` put the build of `b210ddd` in place. The bridge started,
+  found the pad, kept the six Claude keys, and answered Orca's layer as 2 with six empty keys.
+- **Test chat.** One chat was started on this machine in the test workspace of step 2, with
+  no `--focus`, so Orca's window stayed as it was. Orca lists it on host `local`.
+- **A hold with other work on screen.** `micro orca` read the window as the owner had it: one
+  tab, and no chat of this machine with its title. It said a hold would take no chat. So a
+  hold cannot take a chat that runs on the other Mac.
+- Not done yet: the owner's taps and holds on the pad.
+
+### Main's new README came into the branch (2026-11-24 00:40 UTC), nothing built
+
+- Pull request 6 from the website's session was merged on main (`e462d71`). The README is a
+  front page now, and the long ChatGPT sections are in `docs/chatgpt.md` (D-061). Main was
+  merged into `orca-layer` with no conflict. The sentence on Orca's layer is in the new README,
+  and its test count says 326.
+- `scripts/check-public` failed on `Tests/MicroKitTests/OrcaTests.swift` once that file was
+  committed. It held a made-up home folder path with a name longer than one letter, and three
+  made-up session IDs in the shape of a real one. The check reads only the files git tracks, so
+  it had passed while the file was new. The test now uses `/Users/x/…` and IDs that are not in
+  that shape. Run the check after `git add`, not before.
+- `scripts/test`: 326 tests pass. `scripts/check-public`: no private data found.
+
+### Orca's chats on the keys of Orca's layer (2026-11-24 00:30 UTC), built, not on the pad yet
+
+Step 3 of the Orca build (D-056 to D-060, on D-043 to D-055). On the branch `orca-layer`, not
+pushed. The installed app is still the one from before step 1.
+
+- **Hook.** A session whose environment has `ORCA_AGENT_SESSION_ID`, no `ORCA_TERMINAL_HANDLE`
+  and no Claude app session ID is an Orca chat. It reports under Orca's ID with
+  `"host":"orca:<id>"`. `/clear` sends no end. A Claude Code started by another Claude Code
+  sends nothing (D-058).
+- **Keys.** `OrcaKeys` holds the six keys of Orca's layer. The daemon sends a chat's reports
+  there and never to Claude's keys. With no layer for Orca the report is dropped and said once
+  in the log. The keys are saved in `orca-keys.json`.
+- **Hold.** On an empty key it takes the chat whose tab shows in Orca; on a taken key it frees
+  it. A hold that cannot tell which chat flashes the key red twice (D-056).
+- **Tap.** `agentKeys.press` with the chat: `ack`, then the jump: `orca agent show`,
+  `open -b com.stablyai.orca`, `orca worktree activate --worktree id:…`, then a press on the
+  tab with the chat's title (D-059).
+- **Closed chat.** When a chat's process ends the bridge asks Orca whether its tab is still
+  there. No tab: the key goes dim, a tap does nothing, a hold frees it (D-054, D-057).
+- **Config.** The app group `orca` is built in, and Approve and Decline press "Allow" and
+  "Deny" on the chat's card in Orca (D-060). The MicroBridge window lists "In Orca" for each
+  command.
+- **By hand.** `micro ctl orca take|free|show <slot>`, the socket's `orca.take`, `orca.free`
+  and `orca.show`, an `orca` part in `micro ctl state`, and `micro orca`, which prints what the
+  bridge sees of Orca and changes nothing.
+
+What was tried:
+
+- `scripts/test`: 326 tests pass (297 before): PadWire 7, MicroUI 45, MicroKit 274. The daemon
+  tests run the real daemon on the fake pad with a made-up Orca.
+- In the sandbox copy of Orca (D-049, headless, two scratch projects):
+  `orca worktree activate --worktree id:<id> --json` answered `ok: true` with
+  `"activated": true` and the window showed that project. For the project already on screen it
+  answered the same and nothing changed. For an unknown ID it answered `ok: false`,
+  `selector_not_found`. A sleeping project woke. The sandbox was quit afterwards.
+- In the owner's Orca, reading only, through `micro orca` from the dev bundle: the command line
+  was found at `/usr/local/bin/orca`, its list of chats was read, and the tab strip was read in
+  0.08 s with the showing tab marked. Nothing was pressed and no chat was taken.
+- Found there: a tab that cannot be closed (a bot's Home) has a label of its own, without the
+  words "Close tab". So a tab's title is now read from the text the tab shows, and the label is
+  only the fallback. That Home chat was not in `orca agent list`, so a key cannot take it.
+- Found there: at that look no process carried the listed chat's ID while Orca listed the chat
+  as done. A chat's process can be gone while its tab stays, which is why D-057 asks Orca
+  before a key goes dim.
+
+Not tried: anything on the pad. A real hold, tap and jump in the owner's Orca. How the dim
+light looks. Whether `SessionEnd` reaches the new hook when a tab is closed. Whether a chat's
+Claude process is found as the hook's ancestor. A split view. Bluetooth.
+
+### The pad took the three-layer profile (2026-11-23 23:36 UTC), nothing built
+
+The owner left the import to Claude. MicroBridge was stopped for it for about 7 minutes,
+because Work Louder Input cannot read the pad while the bridge holds it, and started again
+after.
+
+- Input's profile list has "Import". The file came in as the profile "Three layers", with
+  layers 1, 2 and 3. Layers 2 and 3 show the names "Orca" and "ChatGPT", and each layer shows
+  the pad's own layout ("To edit this layer please use ChatGPT app").
+- A click on a profile's row sets it active at once. Input counts down "Updating device in 3"
+  and writes the pad. It asks nothing first.
+- With "Three layers" active the pad answered `device.status` with `profile_index` 2 and
+  `layer_index` 2. With "One tap" active again it answered `profile_index` 1 and `layer_index`
+  2. So the profile index follows Input's list from 0, and the pad keeps its layer number
+  when the profile changes.
+- Choosing a layer in Input's window does not move the pad: with layer 3 chosen there, the pad
+  still answered layer 2. Only the touch sensor moves it. That a tap takes the pad to layer 3
+  is not seen yet: it needs the owner's finger.
+- `scripts/micro status` read those answers. It opens the pad itself, so it runs only while
+  no daemon does.
+- Input's file window could not be worked in the background. Picking the file took the screen
+  for one click.
+- Left as it was found: "One tap" is the active profile, the pad is on layer 2, the bridge is
+  running and connected. "Three layers" stays saved in Input. With MicroBridge stopped, one
+  click on its row makes it active.
+
+### Orca's plugin resume does not bring a chat back (2026-11-23 23:15 UTC), nothing built
+
+The owner asked for this try before deciding what a dim key does (D-045). A throwaway worker
+plugin was loaded in the owner's Orca as a development folder, with the access to read
+workspaces, hear agent status and start or resume agents. It answered three requests and was
+unloaded after; Orca's plugin list was the same 25 before and after.
+
+- `agent.resume` with the closed chat's Orca session ID answered `{ terminalId, started: true }`.
+  It opened a terminal that ran the Claude command with `--resume` and that ID, which is not
+  an ID Claude knows. The terminal stopped on Claude's question whether to trust the folder. It
+  was left unanswered and the terminal was closed.
+- `agent.resume` with the Claude session ID of the same chat failed: "Orca could not prepare
+  this session to resume" (the plugin's log: `agent_session_ownership_unknown`).
+- So no way is known to reopen a closed chat as a chat: not this method, and not the command
+  line, the new-tab menu, the search or the menu bar (the entry below). D-045 cannot be built
+  as written.
+- `workspace.readContext` gave the workspace on screen with an empty list of terminals while a
+  chat was its only tab: a plugin does not see chat tabs there. `workspace.open` is documented
+  to show a workspace as a click in the sidebar does (not tried). `agent.listSessions` needs
+  the access `history:read`, which the probe did not ask for.
+- Seen once: setting a chat's permission mode gave the chat a new Claude session ID, while its
+  Orca session ID stayed. A key that holds Orca's ID (D-053) is not thrown by that.
+
+### Orca's chat, tried in the owner's working Orca (2026-11-23 23:10 UTC), nothing built
+
+Step 2 of the Orca build. The owner allowed their working Orca for it (D-049). Three test chats
+were started and closed there and one test file was written and deleted; the owner's own chat
+and its settings were left as they were.
+
+- An Orca chat runs Claude Code, so the bridge's hook already fires in it. Each test chat
+  reported to the bridge and waited for one of Claude's keys, and the one that asked for
+  approval took a key from a real session. `ClaudeHook.isLeftAlone` misses a chat: its process
+  has no `ORCA_TERMINAL_HANDLE`. It does have `ORCA_AGENT_SESSION_ID`, equal to the session ID
+  `orca agent list` shows, with `ORCA_STRUCTURED_SESSION=1` and `CLAUDE_CODE_ENTRYPOINT=orca`
+  (D-053).
+- `orca agent launch --agent claude --surface chat --worktree path:<dir>` opens a chat tab
+  without changing the view and prints its session ID. `--prompt` sends a first message.
+- A tab is one button. Its name is the state, the title, "Close tab" and the title again. Inside
+  it are a group described by the state ("Working", "Needs attention", "Unread agent
+  completion", "Done"; a new chat has none), the title as text, and a button "Close tab
+  <title>". The tab on screen has the class `bg-tab-active`. The tabs sit in the box
+  `group/tab-strip`.
+- The jump works: `micro click "*/<title>" com.stablyai.orca` pressed another chat's tab and
+  then the first one again, while a browser stayed in front. Orca did not come forward. Not
+  tried: a chat in another workspace, which needs `orca worktree activate` first.
+- The permission mode is a menu on each chat's message box, a pop-up button named
+  "Permissions <mode>": "Ask for approval", "Accept edits", "Approve for me", "Full access". It
+  is the chat's own: after one chat was set to "Ask for approval" the next new chat still
+  started in "Full access". The owner's chats are in "Full access" and never ask.
+- In "Ask for approval" a request to write a file put a card where the message box was: a
+  group named "Allow Write?" with "Cancel", "Allow", "Allow for this session", "Deny" and
+  "Details". Orca listed the chat as `blocked`, its tab said "Needs attention", and the hook
+  reported needs-you. `micro click "native-chat-appearance/=Deny" com.stablyai.orca` denied it
+  and no file appeared. On a second request `…/=Allow` allowed it and the file was written.
+  While it works the chat has a button "Stop the agent"; the message box has "Send", off
+  while the box is empty.
+- A closed chat does not come back as a chat by any way found. Closing the tab ends the chat's
+  Claude process, `orca agent list` drops it and `orca agent show` gives no place for it.
+  `orca agent read` still reads the conversation, and `orca search` finds it with a reference
+  to the chat and no resume command (a terminal session gets `claude --resume`). The command
+  line has nothing that reopens it, and neither the new-tab menu, the search (it offered tasks
+  and "Create worktree"), nor the menu bar offered it. The plugin method `agent.resume` was not
+  tried: it is documented as opening a terminal. D-045 is still unproven and waits on the
+  owner.
+- A three-layer pad profile is written (Claude, Orca, ChatGPT, each with layer 1's keys). It
+  was imported later the same day (the entry "The pad took the three-layer profile").
+
+### A second layer of the bridge's own, and layers kept apart (2026-11-23 22:40 UTC), built, not yet on the pad
+
+Step 1 of the Orca build (D-050 to D-052, on D-047). No Orca was needed for it.
+
+- A new setting, `layerApps`, says which layers are the bridge's own and which apps each one is
+  for. Out of the box it is `{"1": ["claude", "terminal"]}` and nothing changes. With
+  `{"2": ["com.stablyai.orca"]}` layer 2 is the bridge's too: it acts on that layer's keys,
+  holds the pad there as on layer 1, and warns of nothing.
+- That layer has its own six Agent Keys. They hold no agents yet, so they are dark, and a press
+  of one does not act on the Claude session that has the same key on layer 1. Back on layer 1
+  the sessions show again.
+- The layers are kept apart. On layer 1 a key, the dial or the stick does nothing in Orca. On
+  layer 2 it does nothing in the Claude app or a terminal. In a browser it acts on both layers.
+  An Agent Key always acts. The log names every press that was stopped.
+- With ChatGPT on layer 3 and `layerKeys`, one tap moves on each time: Claude's keys, Orca's
+  keys, ChatGPT has the pad, and back.
+- The layer is read four times a second while a second layer is set, so a tap counts within a
+  quarter second.
+- Checked on the fake pad only, in 21 new tests (297: 245 for the bridge, 45 for the window,
+  7 for the helper's wire). Each new rule was also broken on purpose in a copy of the code, 16 ways, and
+  a test went red each time.
+- Two of the new tests failed now and then at first. They reached the daemon over its real
+  socket, and with tests running side by side the socket was not read within the client's 2 s.
+  The tests now hand the daemon the command directly (`take`), and wait until it has finished
+  talking to the pad before the next tap (`isBusy`).
+- Not done here: the pad has no layer with these keys yet (the owner imports that profile),
+  nothing was tried on the real pad or in Orca, and the window has no control for the setting.
+
+### Orca, read and talked through before any code (2026-11-23 18:50 UTC), nothing built
+
+The owner opened the talk on Orca's layer (the issue "Orca on a layer of its own"). The
+answers are D-043 to D-049. What was read on the way, on Orca 1.4.271 (`com.stablyai.orca`):
+
+- `orca agent list --json` lists each agent with a kind (`chat` or `terminal`), a state
+  (`working`, `blocked`, `waiting`, `done`), a title, a pane key and an Orca session ID.
+  `orca agent show <id>` says where it is open.
+- A chat is not a terminal. It has the kind `chat` and a pane key that starts with
+  `structured-agent-session-`, and `orca terminal list` does not show it. `orca terminal switch`
+  and the plugin methods `terminal.focus` and `terminal.send` take terminals only.
+  `orca worktree activate` brings a workspace forward. No command says which tab is on screen.
+- The plugin typings (`orca plugin types <dir>` writes them) give a plugin the workspace on
+  screen (`workspace.readContext`, and the event `workspace.changed`), the agents with their
+  state (`agents.list`, and the event `agent.status.changed`), a private store, and
+  `agent.resume`, which reopens a session in a new terminal. Orca's hooks never see a prompt a
+  person types.
+- The chat's controls have names: the message box is "Ask anything, @ to mention files, / for
+  commands", and there are "Send", "Start dictation" and "Permissions". A tab is a button named
+  by its title, next to "Close tab" and that title.
+- Orca's first-run screen has "Yolo mode" switched on: agents act without asking. With it on
+  there is no permission prompt for Approve to press.
+- The bridge has left sessions in Orca's terminals alone since 2026-11-13
+  (`ORCA_TERMINAL_HANDLE`). It knows nothing of chats.
+- The sandbox copy (D-049) is the installed app started with `ORCA_E2E_USER_DATA_DIR`, a `HOME`
+  inside that folder and `ORCA_E2E_HEADLESS=1`. Orca's own command reaches it with
+  `ORCA_USER_DATA_PATH` set to the same folder, and `--remote-debugging-port` lets a script read
+  its window. The owner's Claude settings, `~/.orca`, the `orca` command, the LaunchAgents and
+  the Orca app were identical before and after. It listens on one port on every interface, as
+  the working Orca does.
+- Started a second time with a window, so the owner could sign in to Claude there, the sandbox
+  stopped inside a macOS keychain dialog: its throwaway home has no keychain. It was quit. The
+  owner's keychain list and Claude sign-in were unchanged. The sandbox is for headless use.
+- Not seen yet: the chat's permission prompt, the state `blocked` on a chat, and a closed chat
+  reopened as a chat. Not checked: whether a Claude session in an Orca chat carries
+  `ORCA_TERMINAL_HANDLE`. If it does not, it shows on Claude's layer today.
+- No code and no tests changed (276 tests).
+
 ### Tests that failed now and then (2026-11-23 01:05 UTC), fixed
 
 CI failed on PR 4 in `thePluginAndTheSettingsHookAreNeverBothOn`: permission denied writing a

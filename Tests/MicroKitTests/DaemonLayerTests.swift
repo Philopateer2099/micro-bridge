@@ -77,6 +77,35 @@ final class FakePad: PadLink {
         }
     }
 
+    /// A key goes down and stays down, or comes up.
+    func key(_ key: String, down: Bool) {
+        guard keyLayers.contains(layer) else { return }
+        for report in Self.reports(#"{"method":"v.oai.hid","params":{"k":"\#(key)","act":\#(down ? 1 : 0)}}"#) { onReport?(report) }
+    }
+
+    /// The stick is pushed that far (0…1) toward that angle (0.75 is up), or let go at 0. Like
+    /// the keys it says so only on a layer with the Codex keys.
+    func push(angle: Double, distance: Double) {
+        guard keyLayers.contains(layer) else { return }
+        for report in Self.reports(#"{"method":"v.oai.rad","params":{"a":\#(angle),"d":\#(distance)}}"#) { onReport?(report) }
+    }
+
+    /// The color of each Agent Key in the last light write, 0 for a key that is off.
+    var keyColors: [Int]? {
+        guard let last = requests.last(where: { $0.contains(Method.threadsLighting.rawValue) }),
+              let object = try? JSONSerialization.jsonObject(with: Data(last.utf8)) as? [String: Any],
+              let keys = object["params"] as? [[String: Any]] else { return nil }
+        return keys.map { ($0["c"] as? NSNumber)?.intValue ?? -1 }
+    }
+
+    /// How bright each Agent Key is in the last light write, 0 to 1.
+    var keyBrightness: [Double]? {
+        guard let last = requests.last(where: { $0.contains(Method.threadsLighting.rawValue) }),
+              let object = try? JSONSerialization.jsonObject(with: Data(last.utf8)) as? [String: Any],
+              let keys = object["params"] as? [[String: Any]] else { return nil }
+        return keys.map { ($0["b"] as? NSNumber)?.doubleValue ?? -1 }
+    }
+
     private static func reports(_ text: String) -> [[UInt8]] {
         Framing.reports(for: Array((text + "\n").utf8))
     }
@@ -87,6 +116,8 @@ final class FakePad: PadLink {
 final class Bench {
     static let chatGPT = PadSharing.chatGPT
     static let claude = "com.anthropic.claudefordesktop"
+    static let orca = "com.stablyai.orca"
+    static let safari = "com.apple.Safari"
 
     @MainActor
     final class Scene {
@@ -95,11 +126,22 @@ final class Bench {
         var lines: [String] = []
         /// Notifications, each as its title and its text.
         var notes: [(title: String, text: String)] = []
+        /// Points the stick has scrolled, up and down added. Nothing on screen moves.
+        var scrolled = 0.0
+        /// Orca as the bridge sees it: its Claude chats, the tabs of the workspace on screen,
+        /// and why its command line fails, if it does.
+        var chats: [OrcaChat] = []
+        var tabs: [OrcaTab] = []
+        var orcaProblem: String?
+        /// The chats the bridge brought on screen, by ID, oldest first.
+        var shown: [String] = []
     }
 
     let scene = Scene()
     let pad: FakePad
     let daemon: Daemon
+    /// Where this daemon keeps its files.
+    let directory: String
 
     /// `layers` is the config's value for that setting, as JSON. `more` is further settings,
     /// each with its comma.
@@ -130,8 +172,23 @@ final class Bench {
         world.runningApps = { [scene] in scene.running }
         world.askForAccessibility = {}
         world.notify = { [scene] in scene.notes.append(($0, $1)) }
-        world.appName = { $0 == Bench.chatGPT ? "ChatGPT" : $0 }
+        world.appName = { [Bench.chatGPT: "ChatGPT", Bench.orca: "Orca", Bench.claude: "Claude"][$0] ?? $0 }
         world.log = { [scene] in scene.lines.append($0) }
+        world.scroll = { [scene] in scene.scrolled += abs($0) }
+        // A made-up Orca that answers at once.
+        world.orca.chats = { [scene] done in
+            done(scene.orcaProblem.map { .failure(Orca.Problem($0)) } ?? .success(scene.chats))
+        }
+        world.orca.place = { [scene] id, done in
+            done(scene.orcaProblem.map { .failure(Orca.Problem($0)) } ?? .success(scene.chats.first { $0.id == id }))
+        }
+        world.orca.tabs = { [scene] in scene.tabs }
+        world.orca.show = { [scene] chat, done in
+            scene.shown.append(chat.id)
+            done("its tab is on screen now")
+        }
+        world.orca.settle = 0
+        self.directory = directory
         daemon = try Daemon(world: world)
     }
 
@@ -164,6 +221,19 @@ final class Bench {
 
     func press() {
         pad.press("ACT06")
+    }
+
+    /// The daemon waits for each of the pad's answers with the main run loop running, so
+    /// after an `await` a test may be inside one of those waits, where a reading of the layer
+    /// is skipped. Waits until the daemon is between its conversations with the pad.
+    func idle() async {
+        await wait { !daemon.isBusy }
+    }
+
+    /// What that line does when it comes over the daemon's socket, as from a Claude Code hook
+    /// or `micro ctl`.
+    func say(_ line: String) throws {
+        daemon.take(try Command.parse(line))
     }
 
     /// Waits up to a second for something the daemon does by its own clock.

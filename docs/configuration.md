@@ -187,6 +187,7 @@ With no card on screen, and in every other app, they type Down, Up and Return as
 | `stepAsideFor` | bundle ids of apps that get the pad to themselves while one of them is in front: the bridge lights nothing and acts on no key. Without MicroBridge Helper, both apps hear every key either way, since macOS lets only root keep the pad to itself. While any other app is in front, the bridge paints its lights back over another app's light write, at most once a second. With MicroBridge Helper installed, while one of these apps runs behind another app and the pad is on its first layer, the bridge holds the pad and that app hears nothing. `[]` turns this off. The window's Settings has a switch for ChatGPT | `["com.openai.codex"]` (ChatGPT) |
 | `layers` | layers whose visit passes the pad to another app, by number from 2 to 9, each to a bundle id. Going to such a layer and back (two taps on the touch sensor) gives that app the pad: from then on the bridge lights nothing and acts on no key, whatever is in front. The next visit takes the pad back, and so does that app quitting. Until a visit the bridge keeps the pad even while that app is in front, and with MicroBridge Helper holds it so that app hears nothing. Both apps use layer 1's keys: the Codex keys exist only there. The app must be open to get the pad. The window's Behavior tab has a switch for layer 2 and ChatGPT | `{}` |
 | `layerKeys` | `true` when the pad has the Codex keys on every layer in `layers` as well as on layer 1; the README's "One tap instead of two" says how to put them there. Then there are no visits: the layer the pad is on says who has it. On a layer in `layers` that is its app while it is open. On layer 1, and on that layer while its app is closed, it is the bridge, which acts on that layer's keys too. So one tap on the touch sensor changes who has the pad. The window's Behavior tab has a switch | false |
+| `layerApps` | the bridge's own layers and the apps each one is for, by layer number from 1 to 9: app groups from `apps`, or bundle ids. Layer 1 is always the bridge's. Any other layer listed here is one the bridge drives itself, for an app that does not drive the pad, such as Orca: `{"2": ["orca"]}`. The pad must have the Codex keys on that layer, put there the way the README's "One tap instead of two" does it. On such a layer the bridge acts on the keys, holds the pad from other apps as on layer 1, and shows that layer's own six Agent Keys: on Orca's layer they hold Orca's chats (see [Orca's layer](#orcas-layer)), on any other they stay dark. **The layers are kept apart:** while the pad is on one of these layers, every control but the Agent Keys does nothing in an app that belongs to another one. On layer 1 the keys, the dial and the stick do nothing in Orca, on Orca's layer nothing in the Claude app or a terminal. In an app on no layer, such as a browser, they act the same on every layer. An Agent Key acts whatever is in front, since it brings its own app forward. With only layer 1 here nothing is kept apart. A layer the file leaves out keeps its apps; a layer cannot be in `layers` too, and an app belongs to one layer | `{"1": ["claude", "terminal"]}` |
 | `layerWarning` | show a macOS notification when the pad is on a layer other than 1, and again when it is back, and when a visit to a layer in `layers` passes the pad on; set `false` if you use layers 2 to 6 on purpose | true |
 | `batteryWarning` | show a macOS notification once when the pad's battery falls to this percent while it is not charging; it can warn again after a charge; 0 turns it off | 20 |
 | `clickGuard` | seconds a key stays quiet after its `click:` pressed a button, so a fast second press cannot go on to answer a prompt that appears next; `0` turns it off (default `1`) |
@@ -194,15 +195,84 @@ With no card on screen, and in every other app, they type Down, Up and Return as
 | `rememberHours` | how long a Claude app session that ended keeps its Agent Key. The key shows white (or stays green or red if unread) and a press opens the session again. `"always"`: until another session takes the key (see `urgentFirst`) or you hold the key to clear it. A number: that many hours. 0: the key goes dark as soon as the session ends. The keys also survive a restart of the bridge | "always" |
 
 **Layers.** A tap on the pad's touch sensor (bottom-left edge) cycles its layers. Everything in
-this file works on layer 1 only: on any other layer the pad sends this bridge nothing. The
+this file works on layer 1 only, unless the pad has its keys on more layers (`layerKeys`,
+`layerApps`): on any other layer the pad sends this bridge nothing. The
 bridge reads the layer every 5 seconds, writes changes to its log and shows the notification
 above. While `layers` is set it reads the layer every second, and five times a second for up
 to 10 seconds while it waits for the tap back to layer 1. With `layerKeys` it reads the layer
 four times a second for as long as an app in `layers` is open, since one tap then changes who
-has the pad. `micro ctl state` prints the current `layer` and `battery`.
+has the pad. With a second layer in `layerApps` it reads the layer four times a second all the
+time: one tap then changes whose keys they are. `micro ctl state` prints the current `layer`
+and `battery`.
 
 To find an app's bundle id:
 `defaults read /Applications/Ghostty.app/Contents/Info CFBundleIdentifier`
+
+## Orca's layer
+
+Give Orca a layer, and that layer's six Agent Keys hold Claude chats from Orca's chat view:
+
+```json
+"layerApps": {"2": ["orca"]}
+```
+
+The pad needs the Codex keys on that layer (README, "One tap instead of two"). The app group
+`orca` is built in. Orca's command line (`orca`) must be installed, and MicroBridge needs
+Accessibility.
+
+- **You fill the keys.** Hold an empty key and it takes the chat whose tab shows in Orca. With
+  another kind of tab showing, it takes the only Claude chat among the tabs of that workspace.
+  When that does not single one chat out (several chats and none showing, two chats side by
+  side, two chats with one title), the key flashes red twice and the log says why. Hold a taken
+  key and it lets its chat go. Nothing else takes or frees a key. On this layer the hold is
+  built in, whatever `agentKeys.hold` says, and there is no double tap.
+- **Lights** are those of Claude's layer: blue working, amber needs you, green done, red
+  failed, white idle. They come from the same Claude Code hook. A chat is known by Orca's
+  session ID, which it keeps across `/clear`.
+- **A tap** does what `agentKeys.press` says, with the key's chat: `ack` clears green or red,
+  and `jump` brings Orca forward, opens the chat's workspace and presses its tab. `pane:chat`
+  is skipped.
+- **A closed chat** stays on its key, dim. A tap does nothing and a hold frees the key. A chat
+  whose process ended while its tab is still open keeps its light: the bridge asks Orca which
+  of the two it is.
+- **Approve and Decline** press "Allow" and "Deny" on the chat's permission card
+  (`commands.APPR.orca` and `commands.REJ.orca`). A file that sets `APPR` or `REJ` itself needs
+  those `orca` entries too.
+- A chat in Orca never takes a key on layer 1. With no layer for Orca, its chats get no key at
+  all. Other agents in Orca's chat view, such as Codex, report nothing.
+- The keys are kept in `orca-keys.json` next to the config file: Orca's session IDs and their
+  states, no titles. They survive a restart of the bridge and of Orca. The bridge remembers the
+  title of a key's chat in memory only, so after a restart the key of a closed chat shows the
+  start of its ID.
+- **In the MicroBridge window:** Behavior has the switch "Orca's chats have a layer of their
+  own". It writes the setting above for layer 2, and moves a ChatGPT entry in `layers` from 2
+  to 3 (and back when turned off). Pad lists Orca's six keys with each chat's title: "Show"
+  does what a tap does, "Free" what a hold on a taken key does, and "Put a chat here" puts the
+  chat on screen in Orca, or one picked from Orca's open chats, on an empty key. While the pad
+  is on Orca's layer the drawing shows Orca's keys.
+- **In Orca:** the plugin in [`orca-plugin/`](../orca-plugin/README.md) adds a MicroBridge
+  panel to Orca's right sidebar. It lists the six keys with Show, Free and the same menu, and
+  under "What the controls do in Orca" it changes what a command does on a press while Orca is
+  in front. The change is written to this config file by the bridge, which refuses an action it
+  does not know. Loaded into a running Orca on 2026-11-24: the panel showed the keys as the
+  bridge has them. Its buttons have not been pressed there yet.
+- By hand: `micro ctl orca take <slot> [id]`, `micro ctl orca free <slot>` and
+  `micro ctl orca show <slot>` do what a hold and a tap do (slots count from 0).
+  `micro ctl orca chats` lists Orca's open Claude chats with their IDs and titles, and
+  `micro ctl state` lists the keys under `orca`. `micro orca` prints what the bridge sees of
+  Orca and which chat a hold would take. It changes nothing; `--titles` adds the titles.
+- The bridge always asks the Orca on this Mac, also when your shell points Orca's command line
+  at another machine (`ORCA_ENVIRONMENT`).
+- Limits: a tab has no ID of its own, so a tab is known by its title, and a jump presses the
+  first tab with the chat's title. A bot's Home chat was not in Orca's list of chats when
+  looked at, so a key cannot take it. Seen in Orca 1.4.271.
+- Tried on a real Orca through the socket on 2026-11-24: take, free, show across workspaces,
+  the dim key of a closed chat.
+- Tried on the pad on 2026-11-24 (13:40 to 13:42 UTC): taps on the touch sensor moved the pad
+  to layer 2, to layer 3 and back, and the bridge followed each one. A hold on the empty key 1
+  took the chat on screen and the key lit. A tap on key 1 found its chat's tab on screen
+  already. Not tried on the pad yet: a tap that shows a chat from another tab, the hold that
+  frees a key, the dim key, Approve and Decline on a permission card.
 
 ## Checked on the pad (2026-11-11 and 2026-11-12)
 
@@ -214,8 +284,9 @@ Approve on key 8 and Decline on key 9.
   on an Agent Key opening that Claude app session, the Mic key (hold to dictate), the New
   chat key and the Fork key in the Claude app, and an empty Agent Key opening the new-session
   page.
-- Orca is left out on purpose since 2026-11-13: a Claude Code session started in an Orca
-  terminal takes no Agent Key and no light, no key opens Orca, and typed keys do not go to Orca.
+- Orca's terminals are left out on purpose since 2026-11-13: a Claude Code session started in
+  an Orca terminal takes no Agent Key and no light. Chats in Orca's chat view go to Orca's
+  layer, when it has one (see [Orca's layer](#orcas-layer)).
 - Approve, checked 2026-11-12: key 8 approved two real permission prompts in the Claude app
   (Cmd+Return, "Allow once").
 - Decline (key 7) closed a real permission prompt on 2026-11-12 (16:47 UTC). It also stops the turn.

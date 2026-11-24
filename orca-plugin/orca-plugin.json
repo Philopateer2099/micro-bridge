@@ -1,0 +1,25 @@
+{
+  "manifestVersion": 2,
+  "id": "microbridge",
+  "name": "MicroBridge",
+  "version": "0.1.0",
+  "description": "Put Claude chats on the Agent Keys of a Codex Micro, with the MicroBridge app. Unofficial.",
+  "engines": {
+    "orca": ">=1.4.246"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "pad",
+        "title": "MicroBridge",
+        "icon": "layers",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": []
+}
