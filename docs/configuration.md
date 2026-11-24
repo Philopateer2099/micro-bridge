@@ -250,6 +250,11 @@ Accessibility.
   does what a tap does, "Free" what a hold on a taken key does, and "Put a chat here" puts the
   chat on screen in Orca, or one picked from Orca's open chats, on an empty key. While the pad
   is on Orca's layer the drawing shows Orca's keys.
+- **In Orca:** the plugin in [`orca-plugin/`](../orca-plugin/README.md) adds a MicroBridge
+  panel to Orca's right sidebar. It lists the six keys with Show, Free and the same menu, and
+  under "What the controls do in Orca" it changes what a command does on a press while Orca is
+  in front. The change is written to this config file by the bridge, which refuses an action it
+  does not know. Not loaded into a running Orca yet (2026-11-24).
 - By hand: `micro ctl orca take <slot> [id]`, `micro ctl orca free <slot>` and
   `micro ctl orca show <slot>` do what a hold and a tap do (slots count from 0).
   `micro ctl orca chats` lists Orca's open Claude chats with their IDs and titles, and
@@ -260,7 +265,9 @@ Accessibility.
 - Limits: a tab has no ID of its own, so a tab is known by its title, and a jump presses the
   first tab with the chat's title. A bot's Home chat was not in Orca's list of chats when
   looked at, so a key cannot take it. Seen in Orca 1.4.271.
-- Not tried on the pad yet (2026-11-23): the hold, the tap, the dim light.
+- Tried on a real Orca through the socket on 2026-11-24: take, free, show across workspaces,
+  the dim key of a closed chat. Not tried from the pad's own keys yet: the hold, the tap, the
+  lights.
 
 ## Checked on the pad (2026-11-11 and 2026-11-12)
 

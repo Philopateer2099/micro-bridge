@@ -862,6 +862,89 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Orca in the MicroBridge window and a panel in Orca (2026-11-24 04:55 UTC), built, not in a running Orca yet
+
+Step 4 of the Orca build (D-062 to D-066, on D-044 and D-048). On the branch `orca-layer`, not
+pushed. The installed app is still the build of step 3, so none of this runs on the owner's
+Mac yet. The owner was asleep and had said to leave every running process alone.
+
+- **Window, Pad.** The drawing shows the six keys of the layer the pad is on. A new section,
+  "Orca's keys", lists each key with its chat's title, "Show", "Free", and on an empty key a
+  menu: the chat on screen in Orca, or one of Orca's open Claude chats. A closed chat's key is
+  dim in the list and in the drawing. Orca's section comes first while the pad is on its layer.
+- **Window, Behavior.** One switch, "Orca's chats have a layer of their own", writes
+  `layerApps.2 = ["orca"]` and moves a ChatGPT entry from `layers.2` to `layers.3`, and back
+  (D-064). The ChatGPT rows name the layer the file gives it. The old switch always wrote
+  `layers.2`, which the config check refuses once layer 2 is Orca's.
+- **Socket.** `orca.chats` lists Orca's open Claude chats. A key remembers its chat's title in
+  memory only, so the key of a closed chat can still be named; the keys file and the log hold
+  no title (D-063). `commands` lists what each command does in one app group, and
+  `command.set` writes one change to the config file (D-065). `micro ctl orca chats` asks the
+  first by hand.
+- **One rule for two screens.** `ConfigFile.setCommand` changes a command in the file. The
+  window calls it and so does the bridge, for the panel. The names of commands and controls
+  moved into MicroKit.
+- **This machine only.** The bridge takes `ORCA_ENVIRONMENT` and `ORCA_PAIRING_CODE` out of
+  the environment of Orca's command line, so it always asks the Orca on this Mac (D-062).
+- **Panel.** `orca-plugin/` is an Orca plugin: a panel in the right sidebar and a worker that
+  sends each request to the daemon's socket (D-066). It shows the six keys, takes, frees and
+  shows chats, and changes what a command does on a press in Orca. It stores nothing.
+
+What was tried:
+
+- `scripts/test`: 343 tests pass (326 before): PadWire 7, MicroUI 52, MicroKit 284. New ones
+  cover the titles (in the state answer, not in the file, not in the log), `orca.chats`, the
+  environment of Orca's command line, the layer switches, the demo keys, `setCommand` on a
+  file with and without its own command, and the two command operations on the daemon bench.
+- `scripts/test-plugin`: Orca's `plugin validate` says the manifest is valid; `plugin test`
+  passes 11 tests (the worker against a stand-in daemon on a Unix socket, the panel against a
+  stand-in worker); `plugin check` renders the panel with no refused call or dropped prop.
+- The two new window screens were drawn to pictures with `micro snapshot` and looked at.
+- `scripts/check-public`: no private data found.
+
+What was not tried, and why:
+
+- **The panel inside a running Orca.** A hidden sandbox Orca with its own data folder was
+  started for it, with a stand-in daemon. Its main thread hung at start: the Mac had 71 MB of
+  memory free and 10.3 of 11 GB of swap in use. It was stopped after two minutes, with its
+  helpers. Nothing was loaded into the owner's Orca: `orca plugin list` there shows no
+  MicroBridge plugin. So that a worker may open a Unix socket inside Orca is read from Orca's
+  own words for a `trusted-worker` ("its own code in a separate Node.js process … with your
+  user account's access") and from the test run, not seen in the app.
+- **The window against the running bridge.** The installed bridge is the step 3 build and
+  does not know `orca.chats`. Installing restarts the bridge, which the owner said not to do
+  tonight.
+- **The pad.** It has been unplugged since 03:57 UTC.
+- The plugin was not type-checked with `tsc`, which is not installed here. Orca strips the
+  types when it loads the files.
+
+### Step 3 tried on a real Orca through the socket (2026-11-24 04:05 UTC), works
+
+The owner said Orca was theirs to leave and mine to use for the night, on two conditions:
+this Mac only, and no running process touched. Everything below used two test chats of my own
+in a test workspace, started with `orca agent launch --environment local`, and the bridge's
+socket. The pad was unplugged, so no light was seen.
+
+- `ctl orca take 0 <id>` put a test chat on key 1; the log said so with the chat's state.
+- `ctl orca show 0` brought the chat's tab on screen, also from another workspace: the
+  workspace was activated, then the tab pressed.
+- `ctl orca free 0`, then `ctl orca take 0` with no ID, as a hold does: the key took the chat
+  on screen.
+- The hook's reports arrived under Orca's session ID, with the process, the folder and the
+  record.
+- Closing a chat's tab: within about 2 seconds the log said the chat was closed and its key
+  keeps it and goes dim, and the state answer had `"closed": true`.
+- Refusals read as written: a closed chat, a key that holds a chat already, a key that holds
+  none, a chat that is on another key already.
+- Seen and left as it is: when Claude's turn ends while a command it started still runs in the
+  background, the bridge says done and Orca says working until that command ends. And a chat
+  on no key is forgotten when its process exits, so a key that takes it later starts from
+  Orca's state with no process to watch.
+- Orca's view was put back to the chat the owner had on screen (three presses on "Go back"),
+  and checked.
+
+Not tried: anything from the pad's own keys.
+
 ### The pad test of step 3 was set up (2026-11-24 00:45 UTC), nothing built
 
 The owner said yes to the setup, on one condition: everything stays on this Mac. Their Orca

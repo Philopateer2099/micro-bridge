@@ -282,7 +282,8 @@ class names, so a Claude app update can rename them. A session in a terminal get
 light, and a tap brings the app forward, not the tab. A Claude Code session started in an Orca
 terminal is left alone on purpose. A Claude chat in Orca's chat view gets a key only on a layer
 you give Orca, and only when you put it there
-([docs/configuration.md](docs/configuration.md#orcas-layer)).
+([docs/configuration.md](docs/configuration.md#orcas-layer)). A panel for Orca's sidebar that
+shows those keys is in [orca-plugin/](orca-plugin/README.md).
 
 To report a security problem: [SECURITY.md](SECURITY.md).
 
@@ -291,6 +292,7 @@ To report a security problem: [SECURITY.md](SECURITY.md).
 ```sh
 swift build
 scripts/test           # 343 tests; plain `swift test` works when Xcode is installed
+scripts/test-plugin    # the Orca panel's 11 tests; needs Orca's command line
 scripts/micro listen   # print every key, dial and stick event
 scripts/micro paint    # light the six Agent Keys in six states
 scripts/micro app --demo   # the window with made-up sessions; it writes nothing

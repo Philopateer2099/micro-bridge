@@ -1,0 +1,16 @@
+#!/bin/sh
+# Checks the Orca plugin in orca-plugin/ with Orca's own command line: the manifest, the
+# plugin's tests, and one render of the panel. It talks to no running Orca and no running
+# bridge: MICROBRIDGE_SOCKET points where nothing listens.
+set -eu
+cd "$(dirname "$0")/../orca-plugin"
+if ! command -v orca >/dev/null 2>&1; then
+	echo "orca (Orca's command line) is not installed: the plugin's tests were skipped" >&2
+	exit 0
+fi
+export MICROBRIDGE_SOCKET=/nonexistent/micro-bridge.sock
+orca plugin validate . >/dev/null
+echo "manifest: ok"
+orca plugin test . | grep -E '^(not ok|# (tests|pass|fail))' || true
+orca plugin test . >/dev/null
+orca plugin check .
