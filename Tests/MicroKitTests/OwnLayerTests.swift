@@ -114,7 +114,7 @@ struct OwnLayerTests {
 
         bench.tap(to: 2)
         bench.pad.press("AG00")
-        #expect(bench.said("AG.press key 1 on layer 2: no agent on this key, nothing to do"))
+        #expect(bench.said("AG.press key 1 on layer 2: no chat on this key"))
         #expect(!bench.said("AG.press key 1 in "))
         bench.tap(to: 1)
         // Still done and unread.

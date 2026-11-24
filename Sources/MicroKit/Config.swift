@@ -351,7 +351,8 @@ public struct Config: Sendable, Equatable {
       "rememberHours": "always",
       "apps": {
         "claude": ["com.anthropic.claudefordesktop"],
-        "terminal": ["com.apple.Terminal", "com.mitchellh.ghostty", "com.googlecode.iterm2"]
+        "terminal": ["com.apple.Terminal", "com.mitchellh.ghostty", "com.googlecode.iterm2"],
+        "orca": ["com.stablyai.orca"]
       },
       "agentKeys": {
         "press": ["ack", "jump", "pane:chat"],
@@ -382,8 +383,8 @@ public struct Config: Sendable, Equatable {
         "NEXT": {"claude": ["choose:epitaxy-approval-card/epitaxy-answer-option+Next|Submit/next", "key:down"], "default": "key:down"},
         "PREV": {"claude": ["choose:epitaxy-approval-card/epitaxy-answer-option+Next|Submit/prev", "key:up"], "default": "key:up"},
         "PICK": {"claude": ["choose:epitaxy-approval-card/epitaxy-answer-option/mark", "click:epitaxy-approval-card/=Next!", "click:epitaxy-approval-card/=Submit!", "key:return"], "default": "key:return"},
-        "APPR": {"claude": ["click:Suggested next actions/first", "click:epitaxy-approval-card/Allow once", "click:epitaxy-approval-card/=Next!", "click:epitaxy-approval-card/=Submit!", "key:cmd+return"], "default": "key:return"},
-        "REJ": {"claude": ["click:Suggested next actions/2", "click:Suggested next actions^2/Dismiss", "click:epitaxy-approval-card/Deny", "click:epitaxy-approval-card/=Skip!", "key:escape"], "default": "key:escape"},
+        "APPR": {"claude": ["click:Suggested next actions/first", "click:epitaxy-approval-card/Allow once", "click:epitaxy-approval-card/=Next!", "click:epitaxy-approval-card/=Submit!", "key:cmd+return"], "orca": "click:native-chat-appearance/=Allow", "default": "key:return"},
+        "REJ": {"claude": ["click:Suggested next actions/2", "click:Suggested next actions^2/Dismiss", "click:epitaxy-approval-card/Deny", "click:epitaxy-approval-card/=Skip!", "key:escape"], "orca": "click:native-chat-appearance/=Deny", "default": "key:escape"},
         "SPLIT": {"claude": "key:cmd+opt+o", "terminal": "text:/branch\n"},
         "MIC": {
           "claude": {"press": "key:cmd+d", "release": "key:cmd+d"},

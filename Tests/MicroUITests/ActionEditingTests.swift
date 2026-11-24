@@ -173,7 +173,8 @@ import Testing
     @Test func changingOneAppOfACommandKeepsTheOthers() throws {
         let model = try model(config: "{}")
         #expect(model.commandIsDefault("APPR") && model.commandIsBuiltIn("APPR"))
-        #expect(model.commandTargets("APPR") == ["claude", "terminal", "default"])
+        #expect(model.commandTargets("APPR") == ["claude", "terminal", "orca", "default"])
+        #expect(model.targetTitle("orca") == "In Orca")
         #expect(model.actions(in: list(.command("APPR", target: "default"))) == ["key:return"])
         #expect(model.actions(in: list(.command("APPR", target: "terminal"))).isEmpty)
 
@@ -275,7 +276,7 @@ import Testing
         #expect(model.actions(in: list(.command("ONE", target: "default"))) == ["key:a"])
         #expect(model.actions(in: list(.command("TWO", target: "default"))) == ["key:a", "key:b"])
         #expect(model.actions(in: list(.command("THREE", target: "default"), "hold")) == ["key:b"])
-        #expect(model.commandTargets("FOUR") == ["claude", "terminal", "browser", "com.apple.Notes", "default"])
+        #expect(model.commandTargets("FOUR") == ["claude", "terminal", "orca", "browser", "com.apple.Notes", "default"])
         #expect(model.targetTitle("browser") == "In the browser apps")
         #expect(model.targetTitle("com.apple.Notes") == "In com.apple.Notes")
         #expect(model.actions(in: list(.command("FOUR", target: "browser"), "release")) == ["key:r"])

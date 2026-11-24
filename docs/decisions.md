@@ -440,3 +440,43 @@ Why: The installed build knows two layers. With three on the pad, the way back f
 Consequence: Step 3's test on the pad starts with three changes at once: install the build, change the config, and set "Three layers" active in Input while MicroBridge is stopped. Until then the pad works as before. That a tap reaches layer 3 is still unseen.
 Rejected: Leaving "Three layers" active now: it would prove the third layer sooner, but it changes the owner's daily tap before anything uses the new layer.
 By: claude
+
+## D-056 (2026-11-23): A hold on an empty key takes the chat whose tab shows in Orca
+
+Decision: On Orca's layer a hold on an empty key reads the tabs of Orca's window and Orca's list of Claude chats, and takes the chat whose tab is the one showing, matched by title. With another kind of tab showing it takes the only Claude chat among those tabs. When that does not single out one chat (several chats and none showing, two chats side by side in a split view, two chats with one title, a chat already on a key) the key flashes red twice and the log says why. This refines D-044: the key flashes only when the window does not say which chat is meant.
+Why: D-044 assumed Orca cannot say which tab is on screen. Its command line cannot, but its window can: the selected tab has its own class, seen in the owner's Orca on 2026-11-23. Most holds are made while looking at the chat, so most need no panel.
+Consequence: A hold needs Accessibility and Orca's command line, and takes about a third of a second. Tabs carry no ID, so the match is by title: a chat renamed between the two readings is missed once, and two chats with one title cannot be told apart. The panel of step 4 still picks in the unclear cases.
+Rejected: Flashing whenever a workspace has more than one agent, as D-044 said: it would send the owner to the panel for the common case. Taking the chat that reported last: it is often not the one on screen.
+By: claude
+
+## D-057 (2026-11-23): A chat's key goes dim only when Orca says its tab is closed
+
+Decision: When a chat's Claude process ends (the hook's SessionEnd, or the process found dead), the bridge asks Orca a moment later whether the chat still has a tab. Only with no tab does its key go dim. With a tab the key stays lit and idle. A tap on a dim key asks Orca once more: if the tab is open again the key lights and the tap counts, otherwise the tap does nothing, as D-054 says.
+Why: A process ending is not the tab closing. Orca keeps a chat's tab while its process is gone, and after a restart of Orca the tab is back before the chat says anything. Dimming on the process alone would dim keys of chats that are still open, and D-054 would then make those keys dead to taps.
+Consequence: A closed tab dims its key about a second later, after one call to Orca's command line. If Orca cannot be asked, the chat counts as closed until it reports again or a tap finds it open. A key can show idle for a chat that sleeps.
+Rejected: Dimming as soon as the process ends: wrong for a sleeping chat. Never dimming until a tap fails: the owner asked for the dim key as the sign that a chat was closed (D-045, D-054).
+By: claude
+
+## D-058 (2026-11-23): The hook sends nothing for /clear in a chat, and nothing from a Claude Code started inside a chat
+
+Decision: For a session with Orca's chat ID in its environment, the hook sends no end when SessionEnd gives the reason clear, and sends nothing at all when the Claude Code it runs under was itself started by another Claude Code.
+Why: D-053 names a chat by Orca's ID, which it keeps across /clear: an end there would dim a key whose chat is open. A command that a chat's session runs (claude -p, a nested agent) inherits the chat's ID in its environment, and its reports would light, clear or end the chat's key.
+Consequence: Whether a Claude Code is nested is read from its ancestors: more than one Claude Code among them. Outside Orca both cases report as before.
+Rejected: Telling the chat's own process apart by its process ID: the daemon would have to know the chat's first process, and a chat gets a new one after a restart.
+By: claude
+
+## D-059 (2026-11-23): On Orca's layer the hold is built in, and a tap shows the chat by workspace and tab title
+
+Decision: On Orca's layer a hold on an Agent Key always takes a chat or frees the key, whatever agentKeys.hold says, and there is no double tap. A tap runs agentKeys.press with the key's chat: ack clears what it finished, jump shows it, pane:chat is skipped. To show a chat the bridge asks Orca where it is open, brings Orca forward, runs orca worktree activate for the chat's workspace, then presses the tab with the chat's title in Orca's window, looking for it for up to 3 seconds.
+Why: The keys are filled by hand (D-043), so the hold cannot be left to a setting that means forget on Claude's layer. Orca's command line can bring a workspace forward and cannot select a tab; the tab press was proven in the owner's Orca in step 2, and the activate call in the sandbox copy on 2026-11-24 (UTC): it put the named workspace on screen, did nothing when it already was, and failed cleanly for an unknown one.
+Consequence: A jump takes about half a second and needs Accessibility. A split view is read across all its tab strips. With two tabs of one title the first is pressed. A folder workspace cannot be activated from the command line: the tab is still pressed when its workspace is the one on screen.
+Rejected: Making the hold configurable per layer: one more setting for a gesture that has one meaning there. Selecting the tab by its position: tabs move.
+By: claude
+
+## D-060 (2026-11-23): Orca is in the built-in config as an app group, with Approve and Decline, and on no layer
+
+Decision: The built-in config has the app group orca (com.stablyai.orca), and APPR and REJ have an orca entry that presses Allow and Deny on a chat's permission card. Orca gets a layer only when the owner's file names it under layerApps. The daemon's socket takes orca.take, orca.free and orca.show for a key of Orca's layer, and micro orca prints what the bridge sees of Orca.
+Why: A layer needs the pad's keys on it, which only the owner can set up, so no default can give Orca one. The group and the two buttons are safe everywhere: they do nothing until Orca is in front. The socket commands are what the panel of step 4 will call, and they let the keys be tried without a finger on the pad.
+Consequence: Every command now lists a third place, In Orca, in the MicroBridge window. A config file that sets APPR or REJ itself replaces the whole command and needs the orca entries added by hand. The keys are saved in orca-keys.json with Orca's IDs and states only.
+Rejected: A key fallback such as Return for Approve in Orca: with no card on screen it would send the message being typed.
+By: claude

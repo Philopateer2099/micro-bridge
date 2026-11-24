@@ -862,6 +862,55 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Orca's chats on the keys of Orca's layer (2026-11-24 00:30 UTC), built, not on the pad yet
+
+Step 3 of the Orca build (D-056 to D-060, on D-043 to D-055). On the branch `orca-layer`, not
+pushed. The installed app is still the one from before step 1.
+
+- **Hook.** A session whose environment has `ORCA_AGENT_SESSION_ID`, no `ORCA_TERMINAL_HANDLE`
+  and no Claude app session ID is an Orca chat. It reports under Orca's ID with
+  `"host":"orca:<id>"`. `/clear` sends no end. A Claude Code started by another Claude Code
+  sends nothing (D-058).
+- **Keys.** `OrcaKeys` holds the six keys of Orca's layer. The daemon sends a chat's reports
+  there and never to Claude's keys. With no layer for Orca the report is dropped and said once
+  in the log. The keys are saved in `orca-keys.json`.
+- **Hold.** On an empty key it takes the chat whose tab shows in Orca; on a taken key it frees
+  it. A hold that cannot tell which chat flashes the key red twice (D-056).
+- **Tap.** `agentKeys.press` with the chat: `ack`, then the jump: `orca agent show`,
+  `open -b com.stablyai.orca`, `orca worktree activate --worktree id:…`, then a press on the
+  tab with the chat's title (D-059).
+- **Closed chat.** When a chat's process ends the bridge asks Orca whether its tab is still
+  there. No tab: the key goes dim, a tap does nothing, a hold frees it (D-054, D-057).
+- **Config.** The app group `orca` is built in, and Approve and Decline press "Allow" and
+  "Deny" on the chat's card in Orca (D-060). The MicroBridge window lists "In Orca" for each
+  command.
+- **By hand.** `micro ctl orca take|free|show <slot>`, the socket's `orca.take`, `orca.free`
+  and `orca.show`, an `orca` part in `micro ctl state`, and `micro orca`, which prints what the
+  bridge sees of Orca and changes nothing.
+
+What was tried:
+
+- `scripts/test`: 326 tests pass (297 before): PadWire 7, MicroUI 45, MicroKit 274. The daemon
+  tests run the real daemon on the fake pad with a made-up Orca.
+- In the sandbox copy of Orca (D-049, headless, two scratch projects):
+  `orca worktree activate --worktree id:<id> --json` answered `ok: true` with
+  `"activated": true` and the window showed that project. For the project already on screen it
+  answered the same and nothing changed. For an unknown ID it answered `ok: false`,
+  `selector_not_found`. A sleeping project woke. The sandbox was quit afterwards.
+- In the owner's Orca, reading only, through `micro orca` from the dev bundle: the command line
+  was found at `/usr/local/bin/orca`, its list of chats was read, and the tab strip was read in
+  0.08 s with the showing tab marked. Nothing was pressed and no chat was taken.
+- Found there: a tab that cannot be closed (a bot's Home) has a label of its own, without the
+  words "Close tab". So a tab's title is now read from the text the tab shows, and the label is
+  only the fallback. That Home chat was not in `orca agent list`, so a key cannot take it.
+- Found there: at that look no process carried the listed chat's ID while Orca listed the chat
+  as done. A chat's process can be gone while its tab stays, which is why D-057 asks Orca
+  before a key goes dim.
+
+Not tried: anything on the pad. A real hold, tap and jump in the owner's Orca. How the dim
+light looks. Whether `SessionEnd` reaches the new hook when a tab is closed. Whether a chat's
+Claude process is found as the hook's ancestor. A split view. Bluetooth.
+
 ### The pad took the three-layer profile (2026-11-23 23:36 UTC), nothing built
 
 The owner left the import to Claude. MicroBridge was stopped for it for about 7 minutes,

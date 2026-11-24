@@ -324,7 +324,7 @@ extension BridgeModel {
     /// Where a command can do something: the app groups, any app the file names for it, and
     /// "default" for every other app.
     func commandTargets(_ name: String) -> [String] {
-        func rank(_ group: String) -> Int { group == "claude" ? 0 : group == "terminal" ? 1 : 2 }
+        func rank(_ group: String) -> Int { ["claude", "terminal", "orca"].firstIndex(of: group) ?? 3 }
         var targets = config.apps.keys.sorted { (rank($0), $0) < (rank($1), $1) }
         for (target, _) in commandEntry(name) where target != "default" && !targets.contains(target) {
             targets.append(target)
@@ -336,6 +336,7 @@ extension BridgeModel {
         switch target {
         case "claude": "In the Claude app"
         case "terminal": "In a terminal"
+        case "orca": "In Orca"
         case "default": "Everywhere else"
         default: config.apps[target] == nil ? "In " + target : "In the \(target) apps"
         }

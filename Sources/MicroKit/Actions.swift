@@ -243,7 +243,7 @@ public final class ActionRunner {
     private func pointerToChat(after session: Session?) {
         guard mayType(checkApp: false), let pointer = CGEvent(source: nil)?.location else { return }
         chatTurn += 1
-        if session != nil, session?.host == nil {
+        if let session, session.host == nil || session.host?.orcaChat != nil {
             log("pane:chat: the session is not in the Claude app; the pointer stays")
             return
         }
@@ -497,6 +497,9 @@ public final class ActionRunner {
             // The app's own link for continuing one Code session; it also raises the window.
             spawn("/usr/bin/open", ["-b", "com.anthropic.claudefordesktop", "claude://code/continue?session=\(id)"],
                   slot: nil, session: nil)
+        case .orcaChat:
+            // The daemon shows the chat itself: it needs Orca's answer for where the chat is.
+            spawn("/usr/bin/open", ["-b", Orca.bundleID], slot: nil, session: nil)
         case nil:
             focus(session)
         }

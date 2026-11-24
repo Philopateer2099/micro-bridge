@@ -230,7 +230,9 @@ import Testing
         #expect(problems(#"{"layerApps": {"two": []}}"#).contains { $0.contains("expected a layer from 1 to 9") })
         #expect(problems(#"{"layerApps": {"2": "orca"}}"#).contains { $0.contains("expected a list of app groups or bundle ids") })
         #expect(problems(#"{"layerApps": {"2": [""]}}"#).contains { $0.contains("expected a list of app groups or bundle ids") })
-        #expect(problems(#"{"layerApps": {"2": ["orca"]}}"#).contains { $0.contains("orca: no app group with that name") })
+        #expect(problems(#"{"layerApps": {"2": ["notes"]}}"#).contains { $0.contains("notes: no app group with that name") })
+        // Orca's group is built in.
+        #expect(problems(#"{"layerApps": {"2": ["orca"]}}"#).isEmpty)
         // A layer is the bridge's own or another app's.
         #expect(problems(#"{"layers": {"2": "com.openai.codex"}, "layerApps": {"2": ["com.stablyai.orca"]}}"#)
             .contains { $0.contains("layers gives this layer to com.openai.codex") })

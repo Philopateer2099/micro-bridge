@@ -35,8 +35,16 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   ["com.stablyai.orca"]}` makes layer 2 a layer MicroBridge drives itself, on a pad that has the
   Codex keys there. The layers are kept apart: on layer 1 the keys, the dial and the stick do
   nothing in Orca, and on layer 2 nothing in the Claude app or a terminal. In any other app they
-  act on both layers. Layer 2's six Agent Keys are its own and stay dark for now: Orca's agents
-  come next.
+  act on both layers. Layer 2's six Agent Keys are its own.
+- **Orca's chats on the keys of Orca's layer:** the six Agent Keys of the layer `layerApps`
+  gives Orca hold Claude chats from Orca's chat view, put there by hand. Hold an empty key and
+  it takes the chat whose tab shows in Orca; hold a taken key and it lets the chat go. A key
+  lights by what its chat is doing, in the colors of Claude's layer. A tap brings the chat on
+  screen: Orca comes forward, the chat's workspace opens and its tab is pressed. A chat whose
+  tab was closed stays on its key, dim: a tap does nothing and a hold frees the key. Approve
+  and Decline press "Allow" and "Deny" on a chat's permission card. A chat in Orca never takes
+  a key on Claude's layer. `micro orca` prints what the bridge sees of Orca. Tested against a
+  made-up Orca and read from a real one; not tried on the pad yet.
 
 ### The other controls
 

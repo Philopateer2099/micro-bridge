@@ -292,7 +292,9 @@ Every action and setting: [docs/configuration.md](docs/configuration.md).
 Limits to know about: buttons in the Claude app are found by their accessibility labels and
 class names, so a Claude app update can rename them. A session in a terminal gets a key and a
 light, and a tap brings the app forward, not the tab. A Claude Code session started in an Orca
-terminal is left alone on purpose.
+terminal is left alone on purpose. A Claude chat in Orca's chat view gets a key only on a layer
+you give Orca, and only when you put it there
+([docs/configuration.md](docs/configuration.md#orcas-layer)).
 
 To report a security problem: [SECURITY.md](SECURITY.md).
 

@@ -21,10 +21,14 @@ struct DaemonWorld {
     /// Scrolls what is under the pointer by that many points, positive up. Nil: as a mouse
     /// wheel does. Tests count the points here, so that nothing on screen moves.
     var scroll: (@MainActor (Double) -> Void)?
+    /// How the bridge asks Orca about its chats, and shows one.
+    var orca = OrcaLink()
 
     var socket: String { directory + "/daemon.sock" }
     var config: String { directory + "/config.json" }
     var sessions: String { directory + "/sessions.json" }
+    /// The chats on the keys of Orca's layer.
+    var orcaKeys: String { directory + "/orca-keys.json" }
 }
 
 /// Owns the pad. Keeps the six Agent Keys showing `state`, repaints after every reconnect,
@@ -33,6 +37,10 @@ struct DaemonWorld {
 @MainActor
 public final class Daemon {
     private var state = BridgeState()
+    /// The chats on the keys of Orca's layer, put there by hand.
+    private var orca = OrcaKeys()
+    /// Said once: a chat in Orca reported while no layer is Orca's.
+    private var saidNoOrcaLayer = false
     private var config = Config.builtIn
     private var configStamp: Date?
     private var configRead = false
@@ -137,6 +145,7 @@ public final class Daemon {
         log("typing keys into apps: \(Accessibility.granted ? "allowed" : "not allowed yet")")
         loadConfig()
         restoreSessions()
+        restoreOrcaKeys()
         connect()
         watchLock()
         watchFront()
@@ -215,13 +224,17 @@ public final class Daemon {
         switch command {
         case .state:
             let access = Reply.Access(inputMonitoring: InputMonitoring.current, accessibility: Accessibility.granted)
-            client.send(Reply.state(state, pad: pad?.info, status: padStatus, shown: shown, access: access))
+            client.send(Reply.state(state, pad: pad?.info, status: padStatus, shown: shown, access: access,
+                                    orca: orcaLayer.map { ($0, orca) }))
         case .subscribe:
             client.subscribed = true
             client.send(Reply.ok)
             client.send(Reply.connection(pad != nil))
         case .report, .end, .forget, .set, .clear:
             take(command) { client.send(Reply.ok) }
+        case .orcaTake, .orcaFree, .orcaShow:
+            orcaCommand(command) { problem in client.send(problem.map(Reply.error) ?? Reply.ok) }
+            flush()
         case let .pin(id, _), let .unpin(id):
             guard state.sessions[id] != nil else {
                 client.send(Reply.error("no session \"\(id)\""))
@@ -242,7 +255,12 @@ public final class Daemon {
     /// Does what a session said, or a key painted by hand. `answered` runs before the lights
     /// are written, so whoever said it does not wait for the pad. Tests call it by hand.
     func take(_ command: Command, answered: () -> Void = {}) {
-        if state.apply(command) { lightsChanged() }
+        switch command {
+        case .orcaTake, .orcaFree, .orcaShow:
+            orcaCommand(command) { _ in }
+        default:
+            if !orcaHeard(command), state.apply(command) { lightsChanged() }
+        }
         answered()
         flush()
     }
@@ -260,6 +278,7 @@ public final class Daemon {
         // Every few seconds, forget sessions whose agent process has exited.
         if ticks % 5 == 0 {
             if state.prune(isAlive: ProcessTree.isAlive) { lightsChanged() }
+            for chat in orca.gone(isAlive: ProcessTree.isAlive) { chatExited(chat) }
             saveSessions()
         }
         // A pressed key's hold on its session runs out by itself.
@@ -320,7 +339,17 @@ public final class Daemon {
             log("session \(session.id.prefix(8)) was stopped by hand: its key goes to idle")
             if state.stopped(session.id) { lightsChanged() }
         }
-        recordRead = recordRead.filter { state.sessions[$0.key] != nil }
+        for chat in orca.watchable {
+            guard let path = chat.transcript, let heard = chat.heard,
+                  let changed = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date,
+                  recordRead[chat.id] != changed else { continue }
+            recordRead[chat.id] = changed
+            guard let tail = Transcript.tail(of: path), let at = Transcript.interruptedAt(tail: tail),
+                  at >= heard.addingTimeInterval(-1) else { continue }
+            log("chat \(chat.id.prefix(8)) was stopped by hand: it is idle now")
+            if orca.stopped(chat.id) { lightsChanged() }
+        }
+        recordRead = recordRead.filter { state.sessions[$0.key] != nil || orca.chats[$0.key] != nil }
     }
 
     /// The lights are off now: after a quiet spell, or for a lock.
@@ -451,9 +480,13 @@ public final class Daemon {
         }
         // An Agent Key that does something when held presses when it comes up, so that
         // holding it does not open its session first.
+        // On Orca's layer a hold takes a chat or frees the key, whatever `agentKeys` says.
+        let orcaKeys = actingLayer == orcaLayer
         let fired = gestures.handle(event, at: now, waitsForHold: { [config] control in
-            control == "AG" && !config.actions(for: control, "hold", app: app).isEmpty
-        }, hasDoubleTap: { [config] control in config.hasDoubleTap(control, app: app) })
+            control == "AG" && (orcaKeys || !config.actions(for: control, "hold", app: app).isEmpty)
+        }, hasDoubleTap: { [config] control in
+            !(orcaKeys && control == "AG") && config.hasDoubleTap(control, app: app)
+        })
         for one in fired { perform(one) }
         if gestures.hasKeysDown, holdTimer == nil {
             holdTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
@@ -531,9 +564,11 @@ public final class Daemon {
     private func perform(_ fired: Gestures.Fired) {
         let layer = actingLayer
         if let pressed = fired.slot, layer != LayerWatch.ours {
-            // The sessions on the first layer's keys are not this layer's, and this layer's
-            // keys hold no agents yet.
-            if fired.trigger == "press" {
+            // The sessions on the first layer's keys are not this layer's. Orca's layer has
+            // its chats; any other layer of the bridge's own has no agents.
+            if layer == orcaLayer {
+                orcaKey(pressed, fired.trigger, layer: layer)
+            } else if fired.trigger == "press" {
                 log("AG.press key \(pressed + 1) on layer \(layer): no agent on this key, nothing to do")
             }
             return
@@ -849,9 +884,27 @@ public final class Daemon {
         }
     }
 
+    /// Keys shown red for a moment: a hold that could take no chat.
+    private var flashed: Set<Int> = []
+
+    /// The key shows red and goes back, twice: the pad's way to say no on a key that is dark.
+    private func flash(_ slot: Int) {
+        for step in 0 ..< 4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15 * Double(step)) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if step % 2 == 0 { self.flashed.insert(slot) } else { self.flashed.remove(slot) }
+                    self.dirty = true
+                    self.flush()
+                }
+            }
+        }
+    }
+
     /// Says in the log when an Agent Key went from an idle session to one that needs its person.
     private func noteHandovers() {
         for note in state.takeNotes() { log(note) }
+        for note in orca.takeNotes() { log(note) }
         for handover in state.takeHandovers() {
             // "The key pressed last" meant the session that just left it.
             if selected == handover.slot { selected = nil }
@@ -876,11 +929,23 @@ public final class Daemon {
                     : "key \(pulses.sorted().map { String($0 + 1) }.joined(separator: ", ")) pulses: its session is on screen")
             }
             do {
-                // Another layer of the bridge's own has its own six keys, with no agents yet.
-                var lights = actingLayer == LayerWatch.ours
-                    ? state.lights(config.lighting, selected: pulses, dimmed: dark)
-                    : (0 ..< BridgeState.slotCount).map { AgentStatus.off.light(slot: $0) }
+                // Every layer of the bridge's own has its own six keys: the first shows Claude's
+                // sessions, Orca's shows its chats, and any other has no agents.
+                var lights: [SlotLight]
+                if actingLayer == LayerWatch.ours {
+                    lights = state.lights(config.lighting, selected: pulses, dimmed: dark)
+                } else if actingLayer == orcaLayer {
+                    lights = orca.lights(config.lighting, dimmed: dark)
+                } else {
+                    lights = (0 ..< BridgeState.slotCount).map { AgentStatus.off.light(slot: $0) }
+                }
                 for slot in blinked where lights.indices.contains(slot) { lights[slot] = AgentStatus.off.light(slot: slot) }
+                if !dark {
+                    for slot in flashed where lights.indices.contains(slot) {
+                        lights[slot] = AgentStatus.failed.light(slot: slot, brightness: config.lighting.brightness,
+                                                                color: config.lighting.color(.failed))
+                    }
+                }
                 try pad.setSlots(lights, timeout: 2)
                 if unanswered > 0 {
                     log("pad is answering again")
@@ -941,6 +1006,7 @@ public final class Daemon {
     /// Writes the sessions and their keys to disk when they have changed, so a restart of the
     /// bridge keeps every key on its session.
     private func saveSessions() {
+        saveOrcaKeys()
         guard state != savedState else { return }
         let path = world.sessions
         do {
@@ -967,6 +1033,300 @@ public final class Daemon {
         for note in state.takeNotes() { log(note) }
         savedState = state
         dirty = true
+    }
+
+    /// The keys of Orca's layer as last written to disk.
+    private var savedOrca = OrcaKeys()
+
+    /// Writes the chats on Orca's keys to disk when they have changed. They are there by hand,
+    /// so a restart of the bridge or of Orca must not lose them.
+    private func saveOrcaKeys() {
+        guard orca != savedOrca else { return }
+        let path = world.orcaKeys
+        do {
+            try orca.snapshot().write(toFile: path, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+            savedOrca = orca
+        } catch {
+            log("could not write \(path): \(error.localizedDescription)")
+        }
+    }
+
+    /// Takes the chats on Orca's keys back from disk. A chat whose process is gone shows as
+    /// closed until it reports again, or until a tap finds its tab open in Orca. Tests call it
+    /// by hand.
+    func restoreOrcaKeys() {
+        guard let text = try? String(contentsOfFile: world.orcaKeys, encoding: .utf8) else { return }
+        let held = orca.restore(text) { pid, saved in
+            guard ProcessTree.isAlive(pid), let started = ProcessTree.started(pid) else { return false }
+            return started <= saved.timeIntervalSince1970
+        }
+        savedOrca = orca
+        guard held > 0 else { return }
+        log("Orca chats from before the restart: \(held) keep their keys, \(orca.dimSlots.count) of them closed")
+        dirty = true
+    }
+
+    // MARK: Orca's layer
+
+    /// The layer whose six keys hold Orca's chats: the one `layerApps` gives Orca, when that
+    /// is not the first. The first layer's keys are Claude's sessions' (D-053).
+    private var orcaLayer: Int? {
+        guard let layer = config.layer(ofApp: Orca.bundleID), layer != LayerWatch.ours else { return nil }
+        return layer
+    }
+
+    private static func short(_ id: String) -> Substring { id.prefix(8) }
+
+    /// What a chat in Orca said goes to the keys of Orca's layer, never to a key of Claude's
+    /// (D-053). True when the command was about such a chat.
+    private func orcaHeard(_ command: Command) -> Bool {
+        switch command {
+        case let .report(_, status, pid, cwd, host, transcript):
+            guard let id = host?.orcaChat else { return false }
+            guard orcaLayer != nil else {
+                if !saidNoOrcaLayer {
+                    saidNoOrcaLayer = true
+                    log("a chat in Orca reported, but no layer is Orca's (layerApps): it gets no key. Said once")
+                }
+                return true
+            }
+            if status == .off {
+                chatExited(id)
+            } else if orca.report(id, status, pid: pid, cwd: cwd, transcript: transcript) {
+                lightsChanged()
+            }
+            return true
+        case let .end(id):
+            guard orca.chats[id] != nil else { return false }
+            chatExited(id)
+            return true
+        case let .forget(id):
+            guard let chat = orca.chats[id] else { return false }
+            if let slot = chat.slot { freeOrcaKey(slot) }
+            orca.forget(id)
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// A chat's process is gone: its tab was closed, or Orca stopped. Orca says which, a
+    /// moment later, since it drops a closed tab a moment after its process. A closed chat
+    /// stays on its key, dim (D-054).
+    private func chatExited(_ id: String) {
+        guard orca.exited(id), let slot = orca.chats[id]?.slot else { return }
+        dirty = true
+        let heard = orca.chats[id]?.heard
+        let ask: @MainActor () -> Void = { [weak self] in
+            self?.world.orca.place(id) { [weak self] result in
+                // A chat that reported since is running again.
+                guard let self, let chat = self.orca.chats[id], chat.slot == slot, chat.ended == nil, chat.heard == heard else { return }
+                switch result {
+                case .success(.some):
+                    self.log("chat \(Self.short(id))'s process ended, but Orca still has its tab: key \(slot + 1) stays lit")
+                case .success(nil):
+                    if self.orca.end(id) { self.lightsChanged() }
+                case let .failure(problem):
+                    self.log("could not ask Orca whether chat \(Self.short(id)) is still open (\(problem.text)): key \(slot + 1) counts it as closed")
+                    if self.orca.end(id) { self.lightsChanged() }
+                }
+                self.saveOrcaKeys()
+                self.flush()
+            }
+        }
+        let wait = world.orca.settle
+        if wait > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { MainActor.assumeIsolated { ask() } }
+        } else {
+            ask()
+        }
+    }
+
+    /// A key of Orca's layer by socket command: `orca.take` as a hold on an empty key,
+    /// `orca.free` as a hold on a taken one, `orca.show` as a tap's jump. `done` hears nil, or
+    /// why it did not happen.
+    func orcaCommand(_ command: Command, done: @escaping @MainActor (String?) -> Void) {
+        guard orcaLayer != nil else {
+            done(#"no layer is Orca's: give it one in the config, such as "layerApps": {"2": ["orca"]}"#)
+            return
+        }
+        switch command {
+        case let .orcaTake(slot, chat):
+            if orca.owner(of: slot) != nil {
+                done("key \(slot + 1) holds a chat already: free it first")
+            } else if let chat {
+                world.orca.place(chat) { [weak self] result in
+                    guard let self else { return }
+                    var problem: String?
+                    switch result {
+                    case let .success(place?): problem = self.put(place, on: slot)
+                    case .success(nil): problem = "Orca has no open Claude chat with that ID"
+                    case let .failure(failed): problem = failed.text
+                    }
+                    done(problem)
+                    self.flush()
+                }
+            } else {
+                takeChatOnScreen(slot, done: done)
+            }
+        case let .orcaFree(slot):
+            done(freeOrcaKey(slot) ? nil : "key \(slot + 1) holds no chat")
+        case let .orcaShow(slot):
+            guard let chat = orca.owner(of: slot) else {
+                done("key \(slot + 1) holds no chat")
+                return
+            }
+            showChat(chat.id, slot: slot, done: done)
+        default:
+            done("not a command for Orca's keys")
+        }
+    }
+
+    /// A key of Orca's layer was tapped or held. The keys are filled by hand (D-043): a hold on
+    /// an empty key takes the chat on screen in Orca, a hold on a taken key frees it, and a
+    /// tap does what `agentKeys.press` says with the key's chat.
+    private func orcaKey(_ slot: Int, _ trigger: String, layer: Int) {
+        let key = "key \(slot + 1) on layer \(layer)"
+        switch trigger {
+        case "hold":
+            if orca.owner(of: slot) != nil {
+                log("AG.hold \(key): the key lets its chat go")
+                freeOrcaKey(slot)
+            } else {
+                log("AG.hold \(key): the key takes the chat on screen in Orca")
+                takeChatOnScreen(slot) { _ in }
+            }
+        case "press":
+            guard let chat = orca.owner(of: slot) else {
+                log("AG.press \(key): no chat on this key. Hold it to take the chat on screen in Orca")
+                return
+            }
+            orcaTap(chat, slot: slot, layer: layer)
+        default:
+            break
+        }
+    }
+
+    /// Puts the chat on screen in Orca on that empty key. Orca's window says which tab shows,
+    /// and Orca's command line which chats there are. When that does not single one out the
+    /// key flashes red and the log says why.
+    private func takeChatOnScreen(_ slot: Int, done: @escaping @MainActor (String?) -> Void) {
+        // The window as it is at the hold, not when Orca has answered.
+        let tabs = world.orca.tabs()
+        world.orca.chats { [weak self] result in
+            guard let self else { return }
+            var problem: String?
+            switch result {
+            case let .failure(failed):
+                problem = failed.text
+            case let .success(chats):
+                switch Orca.pick(tabs: tabs, chats: chats) {
+                case let .unclear(why): problem = why
+                case let .chat(chat): problem = self.put(chat, on: slot)
+                }
+            }
+            if let problem {
+                self.log("key \(slot + 1) takes no chat: \(problem)")
+                self.flash(slot)
+            }
+            done(problem)
+            self.flush()
+        }
+    }
+
+    /// Nil when the key holds the chat now, or why it does not.
+    private func put(_ chat: OrcaChat, on slot: Int) -> String? {
+        if let other = orca.chats[chat.id]?.slot { return "that chat is on key \(other + 1) already" }
+        guard orca.take(slot: slot, chat: chat.id, status: chat.status) else { return "key \(slot + 1) holds a chat already" }
+        lightsChanged()
+        saveOrcaKeys()
+        return nil
+    }
+
+    @discardableResult
+    private func freeOrcaKey(_ slot: Int) -> Bool {
+        guard orca.free(slot: slot) != nil else { return false }
+        lightsChanged()
+        saveOrcaKeys()
+        return true
+    }
+
+    /// A tap on a key that holds a chat. A closed chat's key ignores taps (D-054), unless Orca
+    /// has its tab open again, as after a restart of Orca.
+    private func orcaTap(_ chat: Session, slot: Int, layer: Int) {
+        let key = "key \(slot + 1) on layer \(layer)"
+        if chat.ended != nil {
+            world.orca.place(chat.id) { [weak self] result in
+                guard let self, let now = self.orca.owner(of: slot), now.id == chat.id, now.ended != nil else { return }
+                guard case let .success(place?) = result else {
+                    self.log("AG.press \(key): its chat is closed, the tap does nothing. Hold the key to free it")
+                    return
+                }
+                self.orca.reopen(chat.id)
+                self.lightsChanged()
+                self.saveOrcaKeys()
+                if let open = self.orca.owner(of: slot) { self.orcaTap(open, slot: slot, layer: layer, place: place) }
+                self.flush()
+            }
+            return
+        }
+        orcaTap(chat, slot: slot, layer: layer, place: nil)
+    }
+
+    private func orcaTap(_ chat: Session, slot: Int, layer: Int, place: OrcaChat?) {
+        let app = world.frontApp()
+        let actions = config.actions(for: "AG", "press", app: app)
+        log("AG.press key \(slot + 1) on layer \(layer) in \(app ?? "no app"): " + actions.map(\.description).joined(separator: ", "))
+        list: for action in actions {
+            switch action {
+            case .none, .pin, .pointerToChat, .lock:
+                // Nothing to pin: the key keeps its chat until it is freed. The pointer and
+                // the lock are the first layer's.
+                break
+            case .ack:
+                if orca.acknowledge(slot: slot) { dirty = true }
+            case .forget:
+                freeOrcaKey(slot)
+                break list
+            case .jump, .focus:
+                showChat(chat.id, slot: slot, place: place) { _ in }
+            default:
+                if runner.run(action, slot: slot, session: chat) { break list }
+            }
+        }
+    }
+
+    /// Brings the key's chat on screen in Orca. Orca says where the chat is open; with no tab
+    /// for it the chat is closed, and its key goes dim.
+    private func showChat(_ id: String, slot: Int, place known: OrcaChat? = nil, done: @escaping @MainActor (String?) -> Void) {
+        let show: @MainActor (OrcaChat) -> Void = { [weak self] place in
+            guard let self else { return }
+            self.world.orca.show(place) { [weak self] note in
+                self?.log("key \(slot + 1): chat \(Self.short(id)): \(note)")
+                done(nil)
+            }
+        }
+        if let known {
+            show(known)
+            return
+        }
+        world.orca.place(id) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .success(place?):
+                show(place)
+            case .success(nil):
+                if self.orca.end(id) { self.lightsChanged() }
+                self.saveOrcaKeys()
+                self.log("key \(slot + 1): Orca has no open tab for chat \(Self.short(id)): nothing to show")
+                done("its chat is closed")
+            case let .failure(problem):
+                self.log("key \(slot + 1): could not ask Orca where chat \(Self.short(id)) is: \(problem.text)")
+                done(problem.text)
+            }
+            self.flush()
+        }
     }
 
     // MARK: The session on screen
