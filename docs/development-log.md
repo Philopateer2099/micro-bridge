@@ -862,6 +862,31 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The pad test of step 3 was set up (2026-11-24 00:45 UTC), nothing built
+
+The owner said yes to the setup, on one condition: everything stays on this Mac. Their Orca
+also shows work that runs on another Mac.
+
+- **Which machine.** Orca's `host list` names this machine `local`, and the other Mac is a
+  saved environment. The command line goes to this machine unless a command names an
+  environment or the shell has `ORCA_ENVIRONMENT` or `ORCA_PAIRING_CODE`. The bridge's own
+  calls name none, and the daemon's environment has neither variable. Every command of this
+  setup carried `--environment local`.
+- **Profile.** MicroBridge was stopped for 92 seconds. One click on the row "Three layers" in
+  Input set it active, and Input was quit after. The pad answered `profile_index` 2,
+  `layer_index` 1.
+- **Config.** The owner's file got `"layers": {"3": "com.openai.codex"}`,
+  `"layerApps": {"2": ["orca"]}` and an `orca` entry in its own `APPR` and `REJ`. The file from
+  before is `config.json.before-orca-layer`. `micro config check` said ok.
+- **Install.** `scripts/install` put the build of `b210ddd` in place. The bridge started,
+  found the pad, kept the six Claude keys, and answered Orca's layer as 2 with six empty keys.
+- **Test chat.** One chat was started on this machine in the test workspace of step 2, with
+  no `--focus`, so Orca's window stayed as it was. Orca lists it on host `local`.
+- **A hold with other work on screen.** `micro orca` read the window as the owner had it: one
+  tab, and no chat of this machine with its title. It said a hold would take no chat. So a
+  hold cannot take a chat that runs on the other Mac.
+- Not done yet: the owner's taps and holds on the pad.
+
 ### Main's new README came into the branch (2026-11-24 00:40 UTC), nothing built
 
 - Pull request 6 from the website's session was merged on main (`e462d71`). The README is a
