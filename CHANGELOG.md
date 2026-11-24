@@ -44,8 +44,9 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   tab was closed stays on its key, dim: a tap does nothing and a hold frees the key. Approve
   and Decline press "Allow" and "Deny" on a chat's permission card. A chat in Orca never takes
   a key on Claude's layer. `micro orca` prints what the bridge sees of Orca. Tried on a real
-  Orca through the bridge's socket. On the pad the hold that takes a chat and the tap were
-  tried; the hold that frees a key and the dim key were not.
+  Orca through the bridge's socket. On the pad the hold that takes a chat, the tap that
+  shows it and the hold that frees a key were tried; the dim key and the buttons of a
+  permission card were not.
 - **Orca in the MicroBridge window:** Behavior has one switch that gives Orca layer 2 and moves
   ChatGPT's layer to 3. Pad lists Orca's keys with each chat's title, "Show", "Free" and a menu
   that puts a chat on an empty key, and its drawing shows the keys of the layer the pad is on.
