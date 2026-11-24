@@ -1,43 +1,89 @@
-# MicroBridge
+<p align="center">
+  <img src="docs/images/microbridge.png" width="720" alt="A drawing of the Codex Micro with its six top keys lit in five colors, next to the words: Your Codex Micro, wired to Claude Code.">
+</p>
 
-Drives the Codex Micro keypad from Claude Code on macOS. Each of the six Agent Keys follows one
-Claude Code session and lights by what that session is doing. The command keys, dial and stick
-approve, decline, fork, talk and move through Claude's question cards.
+<h1 align="center">MicroBridge</h1>
 
-Website: [microbridge.philopateer.dev](https://microbridge.philopateer.dev) shows the pad, what
-each control does and the install steps.
+<p align="center">
+  <b>Use the Codex Micro keypad with Claude Code on macOS.</b><br>
+  Six keys follow six Claude Code sessions and light by what each one is doing.
+</p>
 
+<p align="center">
+  <a href="https://github.com/Philopateer2099/micro-bridge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Philopateer2099/micro-bridge/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple">
+  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-4d68ff"></a>
+</p>
+
+<p align="center">
+  <a href="https://microbridge.philopateer.dev"><b>Website</b></a> ·
+  <a href="#install">Install</a> ·
+  <a href="docs/configuration.md">Configure</a> ·
+  <a href="docs/chatgpt.md">ChatGPT</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+> [!NOTE]
 > **Unofficial.** The Codex Micro is made by Work Louder for OpenAI and ships working with
 > ChatGPT and Codex. This project is not affiliated with, endorsed by or supported by OpenAI,
 > Work Louder or Anthropic.
 
-## What the pad does
+## The lights
+
+Each of the six Agent Keys follows one Claude Code session, in the Claude app or a terminal.
+
+| Light | The session is |
+|---|---|
+| 🔵 Blue | working |
+| 🟠 Amber | waiting on you |
+| 🟢 Green | done, and you have not looked yet |
+| ⚪ White | idle |
+| 🔴 Red | failed |
+
+The key of the session on screen in the Claude app pulses slowly. With more than six sessions,
+the six most urgent hold the keys.
+
+## The controls
 
 | Control | What happens |
 |---|---|
-| Agent Keys (top six) | One per Claude Code session: blue working, amber needs you, green done and unread, white idle, red failed. The key of the session on screen in the Claude app pulses slowly. |
-| Tap an Agent Key | Clears its green or red and shows that session: its Code session in the Claude app, or the terminal it runs in. |
-| Hold an Agent Key | Forgets its session and frees the key. |
+| **Tap** an Agent Key | Shows that session: its Code session in the Claude app, or the terminal it runs in. Clears its green or red. |
+| **Hold** an Agent Key | Forgets the session and frees the key. |
+| **Approve, Decline** | Press the front session's next-step button: "Allow once", "Deny", or a question card's Next, Submit or Skip. In a terminal: Return or Esc. |
+| **Dial** | On a question card, turn to move between answers and press to tick or submit. Elsewhere, Up and Down, and Return. |
+| **Stick** | Permission mode, previous and next session, sidebar. Or scroll what is under the pointer. |
+| **Mic** (wide key) | Hold to talk. |
+| **Fork, Fast, Codex** | `/branch` or a new chat, `/fast`, send the message. |
+
+Every control can be rebound to any of 49 named commands, a key combination, typed text, a shell
+command or something to open, on press, release, double tap or hold:
+[docs/configuration.md](docs/configuration.md). What is built, control by control:
+[docs/features.md](docs/features.md).
+
+<details>
+<summary><b>More about the keys</b>: pins, ended sessions, more than six</summary>
+
+| | What happens |
+|---|---|
 | Pin a session | It keeps its key, however urgent the others are, and after it ends. Pin and unpin in the window, with `micro ctl pin`, or with a double tap once `agentKeys.doubleTap` is `pin`. |
 | A session that ended | A Claude app session keeps its key, and a tap opens it again. Keys also survive a restart of the bridge. |
 | More than six sessions | The six most urgent hold the keys: needs you first, then done or failed, then working, then idle. The session on screen keeps its key. |
 | Tap a dark Agent Key | Nothing. Bind a key to `cmd:NEW` to start sessions from the pad. |
-| Approve, Decline | Press the front session's next-step button, "Allow once", "Deny", or a question card's Next, Submit or Skip. In a terminal: Return or Esc. |
-| Fork, Fast, Codex | `/branch` or a new chat, `/fast`, send the message. |
-| Mic (wide key) | Hold to talk. |
-| Dial | On a question card, turn to move between answers and press to tick or submit. Elsewhere, Up and Down, and Return. Hold to open the config file. |
-| Stick | Permission mode, previous and next session, sidebar. Up and down can scroll what is under the pointer instead, and left and right move the pointer between panes, such as the chat and a web page. |
+| Hold the dial | Opens the config file. |
+| Stick, left and right | Move the pointer between panes, such as the chat and a web page. |
 
-Every control can be rebound to any of 49 named commands, a key combination, typed text, a shell
-command or something to open, on press, release, double tap or hold. See
-[docs/configuration.md](docs/configuration.md). What is built and what is not, control by
-control: [docs/features.md](docs/features.md).
+</details>
 
 ## The window
 
 ![The MicroBridge window: the pad's six Agent Keys and the session on each one](docs/images/window-pad.png)
 
-Open MicroBridge from `~/Applications`. The sessions in the picture are made up.
+Open MicroBridge from `~/Applications` to see the session on each key, rebind any control,
+change the lights and check the setup. The sessions in the pictures are made up.
+
+<details>
+<summary><b>Every screen</b>, and how changes are saved</summary>
 
 | Screen | What it does |
 |---|---|
@@ -51,18 +97,79 @@ Open MicroBridge from `~/Applications`. The sessions in the picture are made up.
 The window changes `config.json`, and the bridge picks the change up within a second. Before its
 first change it copies the file to `config.json.before-app`. A change the bridge would refuse is
 not written. An action you type is saved when you press Return or its Save button, so a
-half-typed one never reaches a key. A keycap you pick is saved when you press Save in its dialog. Closing the window does not stop the bridge.
+half-typed one never reaches a key. A keycap you pick is saved when you press Save in its
+dialog. Closing the window does not stop the bridge.
 
 ![The keycap dialog: every command as a keycap, with one picked and not saved yet](docs/images/window-keys.png)
 
 ![The Commands screen: the five steps Approve tries in the Claude app](docs/images/window-commands.png)
 
+</details>
+
+## Install
+
+**You need** macOS 14 or later; Swift 6.0 or later (Xcode 16, or just the Command Line Tools:
+`xcode-select --install`, which `git` also asks for on a new Mac); and a Codex Micro over USB,
+on its first layer, the one with the Codex keys. Bluetooth is untested.
+
+```sh
+git clone https://github.com/Philopateer2099/micro-bridge.git && cd micro-bridge
+scripts/make-cert            # optional: a local signing identity, so macOS keeps the
+                             # Input Monitoring grant across rebuilds
+scripts/install              # builds MicroBridge.app into ~/Applications, starts it at login
+scripts/claude-hooks install # adds the hook to ~/.claude/settings.json (backs it up first,
+                             # or creates it if Claude Code has not made one yet)
+scripts/micro access         # shows Input Monitoring and Accessibility, asks for what is missing
+open ~/Applications/MicroBridge.app   # the window; its Setup screen says what is still missing
+```
+
+<details>
+<summary><b>Use the Claude Code plugin</b> instead of the hook</summary>
+
+`scripts/claude-hooks` runs the app's own `micro hooks`. It touches only MicroBridge's entries,
+and `--dry-run` says what it would change first. Instead of the hook in your settings, you can
+use the MicroBridge plugin for Claude Code: in a session, run
+`/plugin install micro-bridge --marketplace Philopateer2099/micro-bridge` (or
+`/plugin marketplace add Philopateer2099/micro-bridge`, then `/plugin install
+micro-bridge@micro-bridge`). Use one or the other: each checks for the other, so an event never
+reaches the bridge twice.
+
+</details>
+
+<details>
+<summary><b>If the pad stays dark</b>, checking it, and removing it</summary>
+
+If the pad stays dark after you grant access, restart the bridge:
+`launchctl kickstart -k "gui/$(id -u)/local.micro-bridge"`.
+
+Check it: `scripts/micro ctl state` shows what each key shows and whether the pad is connected.
+The log is `~/Library/Logs/micro-bridge.log`.
+
+To remove it, run `scripts/claude-hooks remove` and then `scripts/uninstall`. The second stops
+the daemon and removes the app, the login item and the config. The signing identity
+("MicroBridge Local Signing" in Keychain Access) and the two entries in System Settings stay
+until you remove them. If you installed MicroBridge Helper, remove it first with
+`sudo scripts/helper remove`.
+
+</details>
+
+## Passing the pad to ChatGPT
+
+Both apps use the same keys. Turn on "Two taps pass the pad to ChatGPT" on the window's Behavior
+tab. Then tap the pad's touch sensor (its bottom-left edge), wait about a second for the
+notification "ChatGPT has the pad", and tap again: the keys are ChatGPT's. The same two taps give
+the pad back to MicroBridge. With an extra Work Louder Input profile, one tap is enough.
+
+ChatGPT also acts on the keys while another app is in front. The optional MicroBridge Helper
+keeps the pad from it then. Both are explained step by step in [docs/chatgpt.md](docs/chatgpt.md).
+
 ## How it works
 
-```
- Claude Code ──hooks──► micro hook ──socket──► micro daemon ──HID──► Codex Micro
-                                                    │        ◄── key, dial and stick events
-                                                    └──► keystrokes, on-screen buttons, Claude app links
+```mermaid
+flowchart LR
+  CC["Claude Code"] -- hooks --> H["micro hook"] -- socket --> D["micro daemon"]
+  D <-- HID --> P["Codex Micro"]
+  D --> A["keystrokes, on-screen buttons,<br>Claude app links"]
 ```
 
 1. `micro hook` is a Claude Code command hook. It reads the hook's JSON on stdin, reports the
@@ -74,7 +181,7 @@ half-typed one never reaches a key. A keycap you pick is saved when you press Sa
    reconnects after an unplug.
 3. Optional: MicroBridge Helper, a small root program, keeps the pad from ChatGPT while ChatGPT
    is behind another app, since macOS lets only root do that. See
-   [Keeping ChatGPT out](#keeping-chatgpt-out).
+   [Keeping ChatGPT out](docs/chatgpt.md#keeping-chatgpt-out).
 4. Key events become actions. Keystrokes go to the app in front, or only to the apps listed in
    `keystrokeApps` when that list is set. Buttons in the Claude app are found and pressed
    through the Accessibility API.
@@ -84,7 +191,8 @@ half-typed one never reaches a key. A keycap you pick is saved when you press Sa
 The pad speaks JSON-RPC-style messages carried in 64-byte HID reports. The design and its dated
 build log are in [docs/development-log.md](docs/development-log.md).
 
-## Development
+<details>
+<summary><b>Build notes</b>: what the real pad taught us</summary>
 
 Built from 2026-11-10 against a real pad on firmware v0.6.1 (0.6.3 since 2026-11-22). Each
 behavior below was checked on the hardware or in the daemon's log, and the fixes are covered
@@ -143,135 +251,15 @@ USB, for ChatGPT as well, until the cable was replugged. The kernel's HID counte
 how that is being tracked. The low-battery warning is built but has never fired, because the pad
 charges over USB.
 
-## Requirements
-
-- macOS 14 or later and Swift 6.0 or later: Xcode 16, or just the Command Line Tools
-  (`xcode-select --install`, which `git` also asks for on a new Mac)
-- A Codex Micro over USB, on its first layer (the one with the Codex keys). Bluetooth is untested.
-- Input Monitoring and Accessibility access for MicroBridge.app
-
-## Install
-
-```sh
-git clone https://github.com/Philopateer2099/micro-bridge.git && cd micro-bridge
-scripts/make-cert            # optional: a local signing identity, so macOS keeps the
-                             # Input Monitoring grant across rebuilds
-scripts/install              # builds MicroBridge.app into ~/Applications, starts it at login
-scripts/claude-hooks install # adds the hook to ~/.claude/settings.json (backs it up first,
-                             # or creates it if Claude Code has not made one yet)
-scripts/micro access         # shows Input Monitoring and Accessibility, asks for what is missing
-open ~/Applications/MicroBridge.app   # the window; its Setup screen says what is still missing
-```
-
-`scripts/claude-hooks` runs the app's own `micro hooks`. It touches only MicroBridge's entries,
-and `--dry-run` says what it would change first. Instead of the hook in your settings, you can
-use the MicroBridge plugin for Claude Code: in a session, run
-`/plugin install micro-bridge --marketplace Philopateer2099/micro-bridge` (or
-`/plugin marketplace add Philopateer2099/micro-bridge`, then `/plugin install
-micro-bridge@micro-bridge`). Use one or the other: each checks for the other, so an event never
-reaches the bridge twice.
-
-If the pad stays dark after you grant access, restart the bridge:
-`launchctl kickstart -k "gui/$(id -u)/local.micro-bridge"`.
-
-Check it: `scripts/micro ctl state` shows what each key shows and whether the pad is connected.
-The log is `~/Library/Logs/micro-bridge.log`.
-
-To remove it, run `scripts/claude-hooks remove` and then `scripts/uninstall`. The second stops
-the daemon and removes the app, the login item and the config. The signing identity
-("MicroBridge Local Signing" in Keychain Access) and the two entries in System Settings stay
-until you remove them. If you installed MicroBridge Helper, remove it first with
-`sudo scripts/helper remove`.
-
-## Keeping ChatGPT out
-
-ChatGPT acts on the pad's keys even while another app is in front, and it has no setting
-against that. Only a program running as root can keep the pad from it. MicroBridge Helper is
-that program, and it is optional. With it, while ChatGPT runs behind another app, MicroBridge
-holds the pad and ChatGPT hears nothing. With ChatGPT in front, the pad is shared again, and
-ChatGPT picks it back up within seconds.
-
-```sh
-sudo scripts/helper install   # asks for your password; from a download:
-                              # sudo /Applications/MicroBridge.app/Contents/Resources/helper install
-```
-
-Then open System Settings > Privacy & Security > Input Monitoring, press +, and add
-`/Library/PrivilegedHelperTools/MicroBridge Helper.app`. macOS does not let a root program add
-itself to that list. The bridge moves over to the helper within half a minute; its log says
-"through MicroBridge Helper". `scripts/helper status` shows whether it runs, and
-`sudo scripts/helper remove` takes it all out again.
-
-What it does and does not do:
-
-- It opens only the Codex Micro, and only while MicroBridge is connected to it. When
-  MicroBridge quits, the pad is shared again at once.
-- It writes only the five methods listed under Safety and privacy. It checks each request and
-  rebuilds it before writing it.
-- It serves only your account, and only a program signed as MicroBridge with the same
-  certificate as the helper.
-- It holds the pad only on its first layer. On other layers the pad types like a keyboard, and
-  a held keyboard types nothing. If the pad sends keyboard or mouse input while held, the pad
-  is shared at once and that first input is lost.
-- It makes no network connections. Its log, `/Library/Logs/micro-bridge-helper.log`, says when
-  MicroBridge connected and when the pad was held or shared, never what was pressed.
-
-### Passing the pad to ChatGPT
-
-Both apps use the same keys. The Codex keys exist only on the pad's layer 1, and Work Louder
-Input offers none for other layers, so out of the box no layer can be ChatGPT's. Two taps on
-the pad's touch sensor (its bottom-left edge) pass the pad instead. Turn on "Two taps pass the
-pad to ChatGPT" on the window's Behavior tab, or set `"layers": {"2": "com.openai.codex"}`.
-
-1. Tap the touch sensor. The pad goes to layer 2.
-2. Wait about a second for the notification "ChatGPT has the pad".
-3. Tap again. The pad is back on layer 1, and its keys are ChatGPT's.
-
-The same two taps give the pad back to MicroBridge.
-
-- Until the first visit MicroBridge keeps the pad, also while ChatGPT is in front. With the
-  helper, ChatGPT hears nothing; without it, ChatGPT hears the keys too.
-- While ChatGPT has the pad, MicroBridge lights nothing and acts on no key, whatever app is in
-  front. It turns its six Agent Key lights off as it lets go and leaves the ring and the key
-  backlight as they are. After a hold, ChatGPT can take up to 10 s to open the pad again.
-- ChatGPT gets the pad only while it is open. Quitting it gives the pad back, and so does a
-  restart of MicroBridge. A pad that sleeps or loses its cable changes nothing.
-- The pad does not say when its layer changes, so MicroBridge reads it once a second. A visit
-  shorter than that goes unseen: stay on layer 2 until the notification comes. With
-  `layerWarning` off there is no notification, and the log has the same lines.
-
-#### One tap instead of two
-
-The second tap is needed only because layer 2 has no Codex keys. Work Louder Input does not
-offer them for a second layer, but it imports a profile file that has them. With such a profile
-one tap is enough: on layer 2 ChatGPT has the pad, on layer 1 MicroBridge.
-
-1. Stop MicroBridge: `launchctl bootout gui/$(id -u)/local.micro-bridge`. Input cannot write to
-   a pad that MicroBridge Helper holds.
-2. In Work Louder Input, export your profile. It saves `<name>-profile.json`. Keep that file
-   as your backup.
-3. In a copy of the file, give the second entry of `profile.layers` the same `layout` as the
-   first, and give `profile.name` a new name.
-4. In Input, import the copy. It arrives as a second profile. Select it. Your old profile
-   stays as it was.
-5. Start MicroBridge again (`scripts/install`, or log out and in) and turn on "Layer 2 has the
-   pad's keys too" on the window's Behavior tab, or set `"layerKeys": true`.
-
-- The layer the pad is on says who has it, also right after MicroBridge starts. The app in
-  front does not matter.
-- While ChatGPT is closed, MicroBridge acts on layer 2's keys too.
-- MicroBridge reads the layer four times a second while ChatGPT is open, so a tap takes a
-  quarter of a second to count. After a tap to layer 2, ChatGPT can take up to 10 s to open
-  the pad again.
-- To undo it, select your old profile in Input, delete the new one, and turn the setting off.
+</details>
 
 ## Configure
 
-The window's Keys, Commands, Lights and Behavior screens cover almost every setting. Everything is in one
-file, `~/Library/Application Support/micro-bridge/config.json`, picked up within a second of
-saving. Hold the dial to open it. A broken file is ignored and the last good settings stay.
-`micro config check` says what is wrong, and `micro config show` lists what every control does.
-Every action and setting: [docs/configuration.md](docs/configuration.md).
+The window's Keys, Commands, Lights and Behavior screens cover almost every setting. Everything
+is in one file, `~/Library/Application Support/micro-bridge/config.json`, picked up within a
+second of saving. Hold the dial to open it. A broken file is ignored and the last good settings
+stay. `micro config check` says what is wrong, and `micro config show` lists what every control
+does. Every action and setting: [docs/configuration.md](docs/configuration.md).
 
 ## Safety and privacy
 
@@ -285,7 +273,7 @@ Every action and setting: [docs/configuration.md](docs/configuration.md).
 - **Your sessions.** The bridge keeps each session's id, state, folder and process id, and
   reads the end of a waiting session's transcript. Nothing leaves the Mac.
 - **MicroBridge Helper**, if you install it, runs as root. See
-  [Keeping ChatGPT out](#keeping-chatgpt-out) for exactly what it may do.
+  [Keeping ChatGPT out](docs/chatgpt.md#keeping-chatgpt-out) for exactly what it may do.
 - **`sh:` actions** run whatever command your config file names. The default file has one: it
   opens the config file.
 
@@ -315,7 +303,8 @@ made-up sessions, or with `--live` as the bridge is right now.
 app rather than your terminal. Commands that open the pad directly (`listen`, `paint`, `set`,
 `status`, `off`) need the daemon stopped first. `scripts/micro` with no command lists them all.
 
-The landing page is one file with no build step: [site/index.html](site/index.html).
+The website is its own repository:
+[micro-bridge-site](https://github.com/Philopateer2099/micro-bridge-site).
 
 To send a change, read [CONTRIBUTING.md](CONTRIBUTING.md) first. What changed in each release:
 [CHANGELOG.md](CHANGELOG.md).
