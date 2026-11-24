@@ -244,8 +244,14 @@ Accessibility.
   states, no titles. They survive a restart of the bridge and of Orca. The bridge remembers the
   title of a key's chat in memory only, so after a restart the key of a closed chat shows the
   start of its ID.
+- **`keystrokeApps` must name Orca too**, when that list is in use: the bridge types and clicks
+  only in the apps it lists, and an app with a layer of its own is no exception. With Orca
+  missing, Approve, Decline and every other control stay silent in Orca, the bridge's log says
+  so when the config loads, `micro config check` prints a warning, and the window shows it as
+  the next step with a button "Add Orca". An empty list means whichever app is in front.
 - **In the MicroBridge window:** Behavior has the switch "Orca's chats have a layer of their
-  own". It writes the setting above for layer 2, and moves a ChatGPT entry in `layers` from 2
+  own". It writes the setting above for layer 2, adds Orca to `keystrokeApps` when that list
+  is in use, and moves a ChatGPT entry in `layers` from 2
   to 3 (and back when turned off). Pad lists Orca's six keys with each chat's title: "Show"
   does what a tap does, "Free" what a hold on a taken key does, and "Put a chat here" puts the
   chat on screen in Orca, or one picked from Orca's open chats, on an empty key. While the pad

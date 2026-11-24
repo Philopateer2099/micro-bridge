@@ -303,6 +303,23 @@ public struct Config: Sendable, Equatable {
         layer == LayerWatch.ours || layerApps[layer] != nil
     }
 
+    /// The apps a layer besides the first is for that `keystrokeApps` leaves out while it lists
+    /// others. On that layer the pad's controls type and click nothing in such an app.
+    public var layerAppsNotTypedIn: [(layer: Int, app: String)] {
+        guard !keystrokeApps.isEmpty else { return [] }
+        return ownLayers.sorted().flatMap { layer in
+            apps(onLayer: layer).filter { !keystrokeApps.contains($0) }.map { (layer: layer, app: $0) }
+        }
+    }
+
+    /// What is worth saying about a config that loads: one line each, for the log, for
+    /// `micro config check` and for the window.
+    public var warnings: [String] {
+        layerAppsNotTypedIn.map {
+            "layerApps.\($0.layer): \($0.app) is not in keystrokeApps, so on layer \($0.layer) the pad types and clicks nothing in it. Add it to keystrokeApps"
+        }
+    }
+
     /// The bundle ids `layerApps` names for that layer, its app groups spelled out.
     public func apps(onLayer layer: Int) -> [String] {
         (layerApps[layer] ?? []).flatMap { apps[$0] ?? [$0] }

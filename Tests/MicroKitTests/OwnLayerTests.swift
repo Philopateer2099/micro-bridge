@@ -18,6 +18,18 @@ struct OwnLayerTests {
         return bench
     }
 
+    /// The log line that would have explained 2026-11-24 at once: Orca had layer 2, the owner's
+    /// file listed the apps the bridge types in, and Orca was not one of them (D-067).
+    @Test func theBridgeSaysWhenALayersAppIsLeftOutOfTheTypingList() throws {
+        let missing = try Self.bench(more: #""keystrokeApps": ["com.anthropic.claudefordesktop"],"#)
+        missing.tick()
+        #expect(missing.said("layerApps.2: com.stablyai.orca is not in keystrokeApps"))
+
+        let listed = try Self.bench(more: #""keystrokeApps": ["com.anthropic.claudefordesktop", "com.stablyai.orca"],"#)
+        listed.tick()
+        #expect(!listed.said("is not in keystrokeApps"))
+    }
+
     @Test func onItsOwnSecondLayerTheBridgeActsAndWarnsOfNothing() throws {
         let bench = try Self.bench()
         bench.scene.front = Bench.orca

@@ -221,6 +221,27 @@ import Testing
         #expect(try Config.parse(#"{"layerApps": {"1": ["claude"]}}"#).layer(ofApp: "com.mitchellh.ghostty") == nil)
     }
 
+    /// A layer's app that `keystrokeApps` leaves out gets no key and no click from the pad, so a
+    /// config that loads says so (D-067). Seen on the pad on 2026-11-24: Approve did nothing in
+    /// Orca, which had layer 2 and was not in the owner's list.
+    @Test func aLayersAppThatTheTypingListLeavesOutIsWarnedAbout() throws {
+        // An empty list means whichever app is in front: nothing to say.
+        #expect(try Config.parse(#"{"layerApps": {"2": ["orca"]}}"#).warnings.isEmpty)
+
+        let missing = try Config.parse(#"{"keystrokeApps": ["com.anthropic.claudefordesktop"], "layerApps": {"2": ["orca"]}}"#)
+        #expect(missing.layerAppsNotTypedIn.map(\.layer) == [2])
+        #expect(missing.layerAppsNotTypedIn.map(\.app) == ["com.stablyai.orca"])
+        #expect(missing.warnings.count == 1)
+        #expect(missing.warnings.first?.contains("layerApps.2: com.stablyai.orca is not in keystrokeApps") == true)
+
+        let listed = try Config.parse(
+            #"{"keystrokeApps": ["com.anthropic.claudefordesktop", "com.stablyai.orca"], "layerApps": {"2": ["orca"]}}"#)
+        #expect(listed.warnings.isEmpty)
+
+        // The first layer's apps are the built-in ones: a list that leaves a terminal out is a choice.
+        #expect(try Config.parse(#"{"keystrokeApps": ["com.anthropic.claudefordesktop"]}"#).warnings.isEmpty)
+    }
+
     @Test func turnsDownOwnLayersThatCannotWork() {
         func problems(_ text: String) -> [String] {
             do { _ = try Config.parse(text); return [] } catch { return error.problems }

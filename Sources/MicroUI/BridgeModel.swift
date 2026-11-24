@@ -540,10 +540,21 @@ final class BridgeModel: ObservableObject {
         config.layers.filter { $0.value == PadSharing.chatGPT }.keys.min()
     }
 
+    /// Adds the apps that have a layer of their own to `keystrokeApps`, when that list is in use
+    /// and leaves them out: without it the pad types and clicks nothing in them (D-067).
+    func allowTypingInLayerApps() {
+        let missing = config.layerAppsNotTypedIn.map(\.app)
+        guard !missing.isEmpty else { return }
+        set(.array((config.keystrokeApps + missing).map(JSONValue.string)), at: ["keystrokeApps"])
+    }
+
     /// Gives Orca layer 2, or takes its layer away. ChatGPT's layer moves out of the way and
-    /// back: a layer is the bridge's own or another app's, not both.
+    /// back: a layer is the bridge's own or another app's, not both. A `keystrokeApps` list that
+    /// is in use gets Orca too; taking the layer away leaves that list as it is.
     func setOrcaLayer(_ on: Bool) {
         let orca = orcaLayer, chatGPT = chatGPTLayer
+        let typed = config.keystrokeApps
+        let untyped = typed.isEmpty ? [] : (config.apps["orca"] ?? [Orca.bundleID]).filter { !typed.contains($0) }
         if on {
             guard orca == nil else { return }
             guard config.layerApps[2] == nil else {
@@ -556,6 +567,9 @@ final class BridgeModel: ObservableObject {
                     file.set(.string(PadSharing.chatGPT), at: ["layers", "3"])
                 }
                 file.set(.array([.string("orca")]), at: ["layerApps", "2"])
+                if !untyped.isEmpty {
+                    file.set(.array((typed + untyped).map(JSONValue.string)), at: ["keystrokeApps"])
+                }
             }
         } else if let orca {
             edit { file in
@@ -652,6 +666,11 @@ final class BridgeModel: ObservableObject {
                 guard let self else { return }
                 self.openInEditor(self.files.config)
             }
+        }
+        if let missing = config.layerAppsNotTypedIn.first {
+            let name = missing.app == Orca.bundleID ? "Orca" : missing.app
+            return NextStep(text: "Layer \(missing.layer) is for \(name), but the pad may not type or click there: \(name) is not in the list \"Typed keys go to\".",
+                            button: "Add \(name)") { [weak self] in self?.allowTypingInLayerApps() }
         }
         if hookEvents == 0 {
             return NextStep(text: "Claude Code does not report to the bridge yet. Run the copied command in Terminal, or add the MicroBridge plugin in Claude Code.",

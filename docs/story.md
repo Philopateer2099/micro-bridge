@@ -247,3 +247,19 @@ Turned down: a command over the socket that sets any setting. The worker editing
 Cost: the bridge writes the config file for commands only, and only when asked over its socket. Loading the plugin asks me to approve a worker that runs code with my account. Chats on an Orca on another machine cannot be put on keys. After the bridge restarts, the key of a closed chat shows the start of its ID in place of its title.
 
 Still open: the panel passes Orca's own plugin tools, but it has never run inside a running Orca. The second copy of Orca that Claude tests in hung at start that night, because the Mac was short of memory. The new window has not been tried against the running bridge, because nothing was installed that night. The pad's own keys were untried that night. The morning after, Claude installed the build at my word, and on the pad the tap to Orca's layer, the hold that takes a chat and the tap on its key worked. Then I approved the panel's worker, and the panel showed that key in my own Orca.
+
+## 18. The list that stopped Approve
+
+Decisions: D-067
+
+I set a test chat in Orca to ask for approval, got the card, and pressed the ✓ key on the pad. Nothing happened. I pressed it four times.
+
+The bridge had the answer in its log on every press. My settings file has a list of the apps the bridge may type and click in. Orca came off that list on November 13, when I wanted no Orca tie at all. When Claude set up Orca's layer in my file, it did not put Orca back. So the bridge found the command for the Allow button and stopped itself.
+
+Turning point: the night before, Claude had pressed Allow through the command line, which skips this check. That test passed, and the pad's own path was never run on a card. One line in my file fixed my Mac, with my yes.
+
+Turned down: letting an app with a layer be typed in without being on the list. The list would stop being the one place that says where the bridge types.
+
+Cost: two settings still have to agree. Now the tools keep them in step. The window's Orca switch adds Orca to the list. The bridge's log and the config check warn when a layer's app is missing from it. The window shows that as the next step, with a button that adds the app.
+
+Still open: Approve pressing Allow from the pad, with the corrected file, is not seen yet.

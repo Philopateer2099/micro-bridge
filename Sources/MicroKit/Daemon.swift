@@ -187,6 +187,7 @@ public final class Daemon {
             config = try Config.load(path)
             log(stamp == nil ? "no config file, using the built-in defaults"
                 : "config loaded from \(path): \(config.bindings.count) bindings")
+            for warning in config.warnings { log(warning) }
         } catch {
             log("config has problems, keeping the previous settings:\n\(error.description)")
         }
