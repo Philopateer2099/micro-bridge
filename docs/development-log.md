@@ -918,6 +918,11 @@ What was not tried, and why:
 - The plugin was not type-checked with `tsc`, which is not installed here. Orca strips the
   types when it loads the files.
 
+Left as it is for the owner (04:57 UTC): the six keys of Orca's layer hold nothing. Key 1 was
+freed of the test chat with `ctl orca free 0`. One test chat stays open in the test
+workspace, so a hold on the pad has a chat to take; the other was closed in the dim test. The decisions of the build are told in
+chapters 15 to 17 of `docs/story.md`. Nothing was pushed, installed or restarted.
+
 ### Step 3 tried on a real Orca through the socket (2026-11-24 04:05 UTC), works
 
 The owner said Orca was theirs to leave and mine to use for the night, on two conditions:
