@@ -881,7 +881,9 @@ The owner set a test chat to "Ask for approval", got the card "Allow Write?" and
   the next step with a button that adds the app, and the Orca switch adds Orca to a list that
   is in use. 4 tests; `scripts/test` passes 347.
 
-Not seen yet: Approve pressing Allow from the pad with the corrected file.
+Seen with the corrected file at 21:46:37 UTC: the owner pressed ✓ and the log said
+`click:native-chat-appearance/=Allow: pressed "Allow" (153 elements, 29 ms)`. The owner said it
+worked. Not tried since the correction: Decline on a card.
 
 ### Pull request 7 was merged (2026-11-24 16:18 UTC)
 

@@ -277,8 +277,9 @@ Accessibility.
 - Tried on the pad on 2026-11-24 (13:40 to 13:42 and 16:14 to 16:16 UTC): taps on the touch
   sensor moved the pad to layer 2, to layer 3 and back, and the bridge followed each one. A
   hold on an empty key took the chat on screen and the key lit. A tap on a key showed its chat
-  from another tab. A hold on a taken key freed it. Not tried on the pad yet: the dim key,
-  Approve and Decline on a permission card.
+  from another tab. A hold on a taken key freed it. Approve pressed "Allow" on a chat's
+  permission card (21:46 UTC), once Orca was in `keystrokeApps`. Not tried on the pad yet: the
+  dim key, and Decline on a card.
 
 ## Checked on the pad (2026-11-11 and 2026-11-12)
 

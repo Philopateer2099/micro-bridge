@@ -262,4 +262,4 @@ Turned down: letting an app with a layer be typed in without being on the list. 
 
 Cost: two settings still have to agree. Now the tools keep them in step. The window's Orca switch adds Orca to the list. The bridge's log and the config check warn when a layer's app is missing from it. The window shows that as the next step, with a button that adds the app.
 
-Still open: Approve pressing Allow from the pad, with the corrected file, is not seen yet.
+Five minutes later I pressed ✓ again and the card was allowed. Still open: Decline on a card, and the dim key.
