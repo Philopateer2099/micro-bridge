@@ -695,7 +695,7 @@ final class BridgeModel: ObservableObject {
     }
 
     /// Changes the file. A change the bridge would refuse is not written, and `notice` says why.
-    private func edit(_ change: (inout ConfigFile) -> Void) {
+    func edit(_ change: (inout ConfigFile) -> Void) {
         guard var next = file else {
             notice = "The config file is not valid JSON. Open it in an editor and fix it first."
             return
@@ -840,14 +840,6 @@ final class BridgeModel: ObservableObject {
 
     // MARK: Commands
 
-    /// Names people have for the commands the docs describe. The rest show their keycap name.
-    private static let titles: [String: String] = [
-        "APPR": "Approve", "REJ": "Decline", "NEW": "New chat", "SPLIT": "Fork", "MIC": "Mic", "CODEX": "Send",
-        "FAST": "Fast mode", "PLAN": "Permission mode", "FORWARD": "Next session", "BACK": "Previous session",
-        "SIDEBAR": "Sidebar", "NEXT": "Next answer", "PREV": "Previous answer", "PICK": "Pick answer",
-        "PADSETTINGS": "Open the config file", "LOCK": "Lock the Mac",
-    ]
-
     /// Commands that do something, by name.
     var commandNames: [String] {
         config.commands.filter { _, targets in targets.values.contains { $0.values.contains { !$0.isEmpty } } }
@@ -855,7 +847,7 @@ final class BridgeModel: ObservableObject {
     }
 
     func title(_ command: String) -> String {
-        Self.titles[command] ?? command
+        Config.commandTitles[command] ?? command
     }
 
     /// What goes on the drawing of each lower key, by the key's name in the file.
@@ -866,7 +858,7 @@ final class BridgeModel: ObservableObject {
     /// What goes on the drawing of a key.
     func legend(_ key: String) -> String {
         switch keycap(key).cap {
-        case let .command(name): Self.titles[name].map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? name
+        case let .command(name): Config.commandTitles[name].map { $0.split(separator: " ").first.map(String.init) ?? $0 } ?? name
         case .nothing: ""
         case .custom: "Custom"
         }

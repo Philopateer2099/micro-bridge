@@ -512,3 +512,11 @@ Why: A layer is the bridge's own or another app's, not both (the config check re
 Consequence: The window writes only layer 2 for Orca. A file that gives layer 2 to other apps by hand is left alone and the window says so. The pad's profile in Work Louder Input still has to have that many layers, which only the owner can set there.
 Rejected: Letting the owner pick any layer number in the window: more to explain, and the file still allows it by hand.
 By: claude
+
+## D-065 (2026-11-23): The bridge changes a command in the config file for the panel in Orca, by the window's own rule
+
+Decision: The daemon's socket takes commands (what each command does in one app group, with the controls that run it) and command.set (set what a command does on one trigger in one app group). command.set changes the config file with ConfigFile.setCommand, the same function the MicroBridge window now calls, checks the result with Config.parse, keeps the file from before as config.json.before-app once, writes it and reloads. It refuses an unknown command, an action the bridge does not know, a command that runs a command, and a file that is not JSON. The names of commands and controls moved from the window's code into MicroKit so both screens use one list.
+Why: D-048 puts Orca's control settings in two screens with the config file as the one store, read and written through the bridge. A panel in Orca cannot read files, and its worker should not carry a second copy of the file's rules. One function for both screens keeps them in step.
+Consequence: The bridge now writes the config file, where it only read it before: for commands only, and only when asked over its socket, which is open to the owner's account alone. The panel sets what a command does in Orca; every other setting stays in the window and the file.
+Rejected: A general config.set by path over the socket: more than the panel needs, and it would let any setting be written without the window's checks. The plugin's worker editing the file itself: a second copy of the rules, in another language.
+By: claude

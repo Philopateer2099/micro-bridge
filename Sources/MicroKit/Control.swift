@@ -16,6 +16,8 @@ import Foundation
 ///     {"op":"orca.free","slot":2}                → {"ok":true}
 ///     {"op":"orca.show","slot":2}                → {"ok":true}        (as a tap on that key of Orca's layer)
 ///     {"op":"orca.chats"}                        → {"ok":true,"chats":[{"session":"…","title":"…","status":"done","worktree":"…"}]}
+///     {"op":"commands","target":"orca"}          → {"ok":true,"commands":[{"name":"APPR","title":"Approve","controls":["Key 8"],"here":{"press":["…"]},"elsewhere":{"press":["…"]}}]}
+///     {"op":"command.set","name":"APPR","target":"orca","actions":["…"]}  → {"ok":true}  (written to the config file; "trigger" is optional)
 ///
 /// `report` is how agents show up: the daemon gives each session its own Agent Key. It may
 /// carry `"host":"claude:local_…"`, which is where a jump goes. With `"host":"orca:<id>"` the
@@ -42,6 +44,12 @@ public enum Command: Sendable, Equatable {
     case orcaShow(slot: Int)
     /// Asks which Claude chats are open in Orca, for the screens that put them on keys.
     case orcaChats
+    /// Asks what the commands do in one target (an app group, a bundle id or "default"), for
+    /// the panel in Orca.
+    case commands(target: String)
+    /// Sets what a command does on one trigger in one target, in the config file. No actions
+    /// removes that part.
+    case commandSet(name: String, target: String, trigger: String = "press", actions: [String])
 
     public struct Invalid: Error, Equatable, CustomStringConvertible {
         public let description: String
@@ -64,7 +72,29 @@ public enum Command: Sendable, Equatable {
             }
             return id
         }
+        func target() throws(Invalid) -> String {
+            guard let target = value["target"]?.string, !target.isEmpty, target.utf8.count <= 128,
+                  target.unicodeScalars.allSatisfy({ $0.value > 0x20 && $0.value != 0x7F }) else {
+                throw Invalid(description: "\"target\" must be an app group, a bundle id or \"default\"")
+            }
+            return target
+        }
         switch op {
+        case "commands": return .commands(target: try target())
+        case "command.set":
+            guard let name = value["name"]?.string?.uppercased(), (1 ... 24).contains(name.count),
+                  name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+-_".contains($0)) }) else {
+                throw Invalid(description: "\"name\" must be a command's name")
+            }
+            let trigger = value["trigger"]?.string ?? "press"
+            guard Config.triggers.contains(trigger) else {
+                throw Invalid(description: "\"trigger\" must be one of: " + Config.triggers.joined(separator: ", "))
+            }
+            guard case let .array(items)? = value["actions"], items.count <= 32,
+                  items.allSatisfy({ ($0.string?.utf8.count ?? 4096) <= 2048 }) else {
+                throw Invalid(description: "\"actions\" must be a list of at most 32 actions")
+            }
+            return .commandSet(name: name, target: try target(), trigger: trigger, actions: items.compactMap(\.string))
         case "report":
             let pid = value["pid"]?.int
             if let pid, pid <= 1 { throw Invalid(description: "\"pid\" must be greater than 1") }
@@ -297,7 +327,7 @@ public struct BridgeState: Sendable, Equatable {
             slots = [AgentStatus](repeating: .off, count: Self.slotCount)
             sessions = [:]
             reserved = nil
-        case .state, .subscribe, .orcaTake, .orcaFree, .orcaShow, .orcaChats: break
+        case .state, .subscribe, .orcaTake, .orcaFree, .orcaShow, .orcaChats, .commands, .commandSet: break
         }
         return slots != before
     }
@@ -710,6 +740,46 @@ public enum Reply {
             ("chats", .array(chats.map { chat in
                 .object([("session", .string(chat.id)), ("title", .string(chat.title)),
                          ("status", .string(chat.status.rawValue)), ("worktree", .string(chat.worktree))])
+            })),
+        ]).serialized
+    }
+
+    /// One command in the answer to "commands": the controls that run it, what it does in
+    /// the target asked about, and what it does where no app has an entry of its own.
+    public struct CommandRow: Sendable, Equatable {
+        public var name: String
+        /// What people call it, such as Approve. The name when it has no other.
+        public var title: String
+        /// The controls that run it, as the window names them.
+        public var controls: [String]
+        public var here: [(trigger: String, actions: [String])]
+        public var elsewhere: [(trigger: String, actions: [String])]
+
+        public init(name: String, controls: [String], here: [(trigger: String, actions: [String])],
+                    elsewhere: [(trigger: String, actions: [String])]) {
+            self.name = name
+            title = Config.commandTitles[name] ?? name
+            self.controls = controls
+            self.here = here
+            self.elsewhere = elsewhere
+        }
+
+        public static func == (first: CommandRow, second: CommandRow) -> Bool {
+            first.name == second.name && first.controls == second.controls
+                && first.here.elementsEqual(second.here, by: ==) && first.elsewhere.elementsEqual(second.elsewhere, by: ==)
+        }
+    }
+
+    public static func commands(_ rows: [CommandRow]) -> String {
+        func lists(_ lists: [(trigger: String, actions: [String])]) -> JSONValue {
+            .object(lists.map { ($0.trigger, .array($0.actions.map(JSONValue.string))) })
+        }
+        return JSONValue.object([
+            ("ok", .bool(true)),
+            ("commands", .array(rows.map { row in
+                .object([("name", .string(row.name)), ("title", .string(row.title)),
+                         ("controls", .array(row.controls.map(JSONValue.string))),
+                         ("here", lists(row.here)), ("elsewhere", lists(row.elsewhere))])
             })),
         ]).serialized
     }

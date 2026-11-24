@@ -211,6 +211,75 @@ public final class Daemon {
         flush()
     }
 
+    // MARK: Commands, for the panel in Orca
+
+    /// The config file as it is on disk, or an empty one when there is none. Nil when the
+    /// file is not a JSON object.
+    private func configFile() -> ConfigFile? {
+        guard let text = try? String(contentsOfFile: world.config, encoding: .utf8) else { return ConfigFile(text: "{}") }
+        return ConfigFile(text: text)
+    }
+
+    /// What the commands do in `target`: every command a control runs, then every other one
+    /// that has an entry for that target. The panel in Orca shows them and changes them.
+    func commands(in target: String) -> [Reply.CommandRow] {
+        let file = configFile() ?? ConfigFile.builtIn
+        let order = ["AG"] + Config.keyControls + ["DIAL", "STICK"]
+        var controls: [String: [String]] = [:]
+        for (binding, actions) in config.bindings {
+            guard let control = binding.split(separator: ".").first.map(String.init) else { continue }
+            for case let .command(name, _) in actions where controls[name]?.contains(control) != true {
+                controls[name, default: []].append(control)
+            }
+        }
+        func place(_ control: String) -> Int { order.firstIndex(of: control) ?? order.count }
+        let rows = config.commands.keys.compactMap { name -> Reply.CommandRow? in
+            let here = file?.commandLists(name, target: target, defaults: ConfigFile.builtIn).filter { !$0.actions.isEmpty } ?? []
+            let elsewhere = file?.commandLists(name, target: "default", defaults: ConfigFile.builtIn)
+                .filter { !$0.actions.isEmpty } ?? []
+            let runBy = (controls[name] ?? []).sorted { place($0) < place($1) }
+            guard !runBy.isEmpty || !here.isEmpty else { return nil }
+            return Reply.CommandRow(name: name, controls: runBy.map { Config.controlTitles[$0] ?? $0 }, here: here,
+                                    elsewhere: elsewhere)
+        }
+        func first(_ row: Reply.CommandRow) -> Int { (controls[row.name] ?? []).map(place).min() ?? order.count + 1 }
+        return rows.sorted { one, two in first(one) != first(two) ? first(one) < first(two) : one.name < two.name }
+    }
+
+    /// Writes what a command does on one trigger in one target to the config file, by the
+    /// rule the MicroBridge window uses. Returns why it did not, or nil when it did.
+    func setCommand(_ name: String, target: String, trigger: String = "press", actions: [String]) -> String? {
+        guard config.commands[name] != nil else { return "no command named \(name)" }
+        for text in actions {
+            guard let action = Action.parse(text) else { return "\(text): not an action the bridge knows" }
+            if case .command = action { return "\(text): a command cannot run another command" }
+        }
+        guard var file = configFile() else { return "the config file is not valid JSON: fix it in an editor first" }
+        let before = file
+        file.setCommand(name, target: target, trigger: trigger, actions: actions, defaults: ConfigFile.builtIn)
+        guard file != before else { return nil }
+        let text = file.text
+        do {
+            _ = try Config.parse(text)
+        } catch {
+            return "not saved: " + error.description
+        }
+        let manager = FileManager.default
+        let path = world.config, backup = path + ".before-app"
+        do {
+            // The first save rewrites the file's layout, so keep the file as the person wrote it.
+            if manager.fileExists(atPath: path), !manager.fileExists(atPath: backup) {
+                try manager.copyItem(atPath: path, toPath: backup)
+            }
+            try text.write(toFile: path, atomically: true, encoding: .utf8)
+        } catch {
+            return "could not save the config file: \(error.localizedDescription)"
+        }
+        log("command \(name): \(trigger) in \(target) changed over the socket")
+        loadConfig()
+        return nil
+    }
+
     // MARK: Socket
 
     private func handle(_ line: String, from client: SocketServer.Client) {
@@ -237,6 +306,10 @@ public final class Daemon {
             flush()
         case .orcaChats:
             orcaChats { client.send($0) }
+        case let .commands(target):
+            client.send(Reply.commands(commands(in: target)))
+        case let .commandSet(name, target, trigger, actions):
+            client.send(setCommand(name, target: target, trigger: trigger, actions: actions).map(Reply.error) ?? Reply.ok)
         case let .pin(id, _), let .unpin(id):
             guard state.sessions[id] != nil else {
                 client.send(Reply.error("no session \"\(id)\""))

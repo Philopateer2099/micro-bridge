@@ -93,3 +93,102 @@ public struct ConfigFile: Sendable, Equatable {
         }
     }
 }
+
+// MARK: Commands
+
+extension Config {
+    /// Names people have for the commands the docs describe. The rest show their keycap name.
+    public static let commandTitles: [String: String] = [
+        "APPR": "Approve", "REJ": "Decline", "NEW": "New chat", "SPLIT": "Fork", "MIC": "Mic", "CODEX": "Send",
+        "FAST": "Fast mode", "PLAN": "Permission mode", "FORWARD": "Next session", "BACK": "Previous session",
+        "SIDEBAR": "Sidebar", "NEXT": "Next answer", "PREV": "Previous answer", "PICK": "Pick answer",
+        "PADSETTINGS": "Open the config file", "LOCK": "Lock the Mac",
+    ]
+
+    /// What the MicroBridge window and the panel in Orca call each control.
+    public static let controlTitles: [String: String] = [
+        "AG": "Agent Keys", "ACT06": "Key 7", "ACT07": "Key 8", "ACT08": "Key 9", "ACT09": "Key 10", "WIDE": "Wide key",
+        "ACT12": "Key 12", "DIAL": "Dial", "STICK": "Stick",
+    ]
+}
+
+/// What a command does in each app, read and changed in the file. The MicroBridge window and
+/// the bridge (for the panel in Orca) both change commands through here, so they agree.
+extension ConfigFile {
+    /// The bridge's own settings, as a file.
+    public static let builtIn = ConfigFile(text: Config.defaultFileText)
+
+    /// The actions in a binding as the file writes it: one action or a list. `none` is left out.
+    public static func spellings(_ value: JSONValue?) -> [String] {
+        let texts: [String]
+        switch value {
+        case let .string(text)?: texts = [text]
+        case let .array(items)?: texts = items.compactMap(\.string)
+        default: texts = []
+        }
+        return texts.filter { Action.parse($0) != Action.none }
+    }
+
+    /// One action is written as a string, several as a list.
+    public static func binding(_ actions: [String]) -> JSONValue {
+        actions.count == 1 ? .string(actions[0]) : .array(actions.map(JSONValue.string))
+    }
+
+    /// A control or a command target as one list per trigger. An action or a list on its own
+    /// is the press.
+    public static func triggerLists(_ value: JSONValue?) -> [(trigger: String, actions: [String])] {
+        guard let value else { return [] }
+        if case let .object(pairs) = value { return pairs.map { ($0.0, spellings($0.1)) } }
+        return [("press", spellings(value))]
+    }
+
+    /// The name the file itself has for a command. The bridge reads names in any case.
+    public func commandKey(_ name: String) -> String {
+        if case let .object(pairs)? = value(at: ["commands"]),
+           let own = pairs.first(where: { $0.0.uppercased() == name }) {
+            return own.0
+        }
+        return name
+    }
+
+    /// A command as targets, whichever of its forms the file uses: an action, a list or an
+    /// object of triggers is what it does everywhere. From `defaults` when this file leaves
+    /// the command out.
+    public func commandEntry(_ name: String, defaults: ConfigFile?) -> [(String, JSONValue)] {
+        guard let value = value(at: ["commands", commandKey(name)]) ?? defaults?.value(at: ["commands", name]) else { return [] }
+        if case let .object(pairs) = value, pairs.isEmpty || !pairs.allSatisfy({ Config.triggers.contains($0.0) }) {
+            return pairs
+        }
+        return [("default", value)]
+    }
+
+    /// What a command does in one target (an app group, a bundle id or "default"), one list
+    /// per trigger.
+    public func commandLists(_ name: String, target: String, defaults: ConfigFile?) -> [(trigger: String, actions: [String])] {
+        Self.triggerLists(commandEntry(name, defaults: defaults).first { $0.0 == target }?.1)
+    }
+
+    /// Replaces what a command does on one trigger in one target. An empty list removes it.
+    /// The command's other parts are written back as they are, because a command the file
+    /// mentions does only what the file says.
+    public mutating func setCommand(_ name: String, target: String, trigger: String = "press", actions: [String],
+                                    defaults: ConfigFile?) {
+        let kept = actions.filter { Action.parse($0) != Action.none }
+        var entry = commandEntry(name, defaults: defaults)
+        var lists = Self.triggerLists(entry.first { $0.0 == target }?.1).filter { !$0.actions.isEmpty }
+        if let index = lists.firstIndex(where: { $0.trigger == trigger }) {
+            if kept.isEmpty { lists.remove(at: index) } else { lists[index].actions = kept }
+        } else if !kept.isEmpty {
+            lists.append((trigger, kept))
+        }
+        let value: JSONValue? = lists.isEmpty
+            ? nil : lists.count == 1 && lists[0].trigger == "press" ? Self.binding(lists[0].actions)
+            : .object(lists.map { ($0.trigger, Self.binding($0.actions)) })
+        if let index = entry.firstIndex(where: { $0.0 == target }) {
+            if let value { entry[index].1 = value } else { entry.remove(at: index) }
+        } else if let value {
+            entry.append((target, value))
+        }
+        set(.object(entry), at: ["commands", commandKey(name)])
+    }
+}

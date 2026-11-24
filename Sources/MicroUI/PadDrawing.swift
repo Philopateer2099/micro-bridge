@@ -28,9 +28,7 @@ enum PadControl: Hashable {
         }
     }
 
-    static let keyTitles = [
-        "ACT06": "Key 7", "ACT07": "Key 8", "ACT08": "Key 9", "ACT09": "Key 10", "WIDE": "Wide key", "ACT12": "Key 12",
-    ]
+    static let keyTitles = Config.controlTitles.filter { ["ACT06", "ACT07", "ACT08", "ACT09", "WIDE", "ACT12"].contains($0.key) }
 }
 
 extension Color {
