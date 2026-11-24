@@ -862,6 +862,21 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### The finished build was installed (2026-11-24 13:36 UTC), the bridge runs
+
+The owner plugged the pad in and said to install. `scripts/install` built the release from
+85feb80 and restarted the bridge.
+
+- The bridge started, loaded the owner's config (34 bindings) and found the pad over USB
+  through the helper, on layer 1.
+- The 6 Claude sessions from before the restart kept their keys.
+- The state answer names layer 2 as Orca's, with no chat on its keys.
+- The new socket commands answer: `orca.chats` lists the 2 chats open in this Mac's Orca, and
+  `commands` for `orca` lists 10 commands.
+
+Not tried yet: the pad's own keys on Orca's layer, the window opened again against this
+bridge, the panel inside Orca.
+
 ### Orca in the MicroBridge window and a panel in Orca (2026-11-24 04:55 UTC), built, not in a running Orca yet
 
 Step 4 of the Orca build (D-062 to D-066, on D-044 and D-048). On the branch `orca-layer`, not
