@@ -45,8 +45,13 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   and Decline press "Allow" and "Deny" on a chat's permission card. A chat in Orca never takes
   a key on Claude's layer. `micro orca` prints what the bridge sees of Orca. Tried on a real
   Orca through the bridge's socket. On the pad the hold that takes a chat, the tap that
-  shows it and the hold that frees a key were tried; the dim key and the buttons of a
-  permission card were not.
+  shows it, the hold that frees a key and Approve on a permission card were tried; the dim key
+  and Decline were not.
+- **A layer's app and `keystrokeApps`:** the bridge types and clicks only in the apps that
+  list names, when it is in use. A config that gives an app a layer and leaves it off the list
+  now gets a warning in the log, in `micro config check` and as the window's next step, and
+  the window's Orca switch adds Orca to the list. Before, Approve and Decline did nothing in
+  Orca with such a file and nothing said why until a press.
 - **Orca in the MicroBridge window:** Behavior has one switch that gives Orca layer 2 and moves
   ChatGPT's layer to 3. Pad lists Orca's keys with each chat's title, "Show", "Free" and a menu
   that puts a chat on an empty key, and its drawing shows the keys of the layer the pad is on.

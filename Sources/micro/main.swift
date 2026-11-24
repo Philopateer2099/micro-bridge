@@ -225,6 +225,7 @@ case "config":
         }
         if args[1] == "check" {
             print("ok: \(config.bindings.count) bindings, \(config.commands.count) commands")
+            for warning in config.warnings { print("warning: \(warning)") }
         } else {
             let lighting = config.lighting
             print("brightness \(Int(lighting.brightness * 100)), auto-dim \(lighting.autoDimSeconds == 0 ? "never" : "\(lighting.autoDimSeconds) s"), pulse the key of the session on screen \(lighting.pulseSelected ? "on" : "off"), off when you lock with ⌃⌘Q \(lighting.offWhenLocked ? "on" : "off")")

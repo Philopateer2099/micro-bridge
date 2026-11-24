@@ -407,6 +407,36 @@ import Testing
         #expect(try Config.load(model.files.config).layers == [2: PadSharing.chatGPT])
     }
 
+    /// A `keystrokeApps` list that is in use must name Orca, or the pad types and clicks nothing
+    /// there (D-067): the switch adds it, and leaves an empty list, which allows every app, alone.
+    @Test func orcasLayerSwitchPutsOrcaOnTheTypingListWhenThatListIsInUse() throws {
+        let listed = try model(config: #"{"keystrokeApps": ["com.anthropic.claudefordesktop"]}"#)
+        listed.setOrcaLayer(true)
+        #expect(listed.config.keystrokeApps == ["com.anthropic.claudefordesktop", "com.stablyai.orca"])
+        #expect(listed.config.warnings.isEmpty && listed.problems.isEmpty)
+        listed.save()
+        #expect(try Config.load(listed.files.config).keystrokeApps.contains("com.stablyai.orca"))
+        // Taking the layer away leaves the list as it is: it is the owner's.
+        listed.setOrcaLayer(false)
+        #expect(listed.config.keystrokeApps.contains("com.stablyai.orca"))
+
+        let open = try model(config: "{}")
+        open.setOrcaLayer(true)
+        #expect(open.orcaLayer == 2 && open.config.keystrokeApps.isEmpty)
+    }
+
+    /// A file written by hand that gives Orca a layer and leaves it off the list: the window
+    /// says so as the next step, and its button adds Orca.
+    @Test func theNextStepAddsALayersAppToTheTypingList() throws {
+        let model = try model(config: #"{"keystrokeApps": ["com.anthropic.claudefordesktop"], "layerApps": {"2": ["orca"]}}"#)
+        #expect(model.config.layerAppsNotTypedIn.map(\.app) == ["com.stablyai.orca"])
+        model.allowTypingInLayerApps()
+        #expect(model.config.keystrokeApps == ["com.anthropic.claudefordesktop", "com.stablyai.orca"])
+        #expect(model.config.layerAppsNotTypedIn.isEmpty)
+        model.save()
+        #expect(try Config.load(model.files.config).warnings.isEmpty)
+    }
+
     @Test func chatGPTsSwitchTakesTheFirstLayerThatIsFree() throws {
         let model = try model(config: "{}")
         model.setOrcaLayer(true)

@@ -862,6 +862,29 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### Approve did nothing in Orca: Orca was not in `keystrokeApps` (2026-11-24 21:35 UTC), fixed in the file and in the tools
+
+The owner set a test chat to "Ask for approval", got the card "Allow Write?" and pressed the
+✓ key four times and the ✗ key once. Nothing happened.
+
+- The log had the cause on each press: `ACT07.press in com.stablyai.orca:
+  click:native-chat-appearance/=Allow`, then `not typing: com.stablyai.orca is in front and is
+  not in keystrokeApps`. The owner's file lists the apps the bridge types in. Orca came off
+  that list on 2026-11-13, and the setup of Orca's layer on 2026-11-24 did not put it back.
+- Why it was not seen before: the night's test pressed Allow with `micro click`, which does not
+  go through this check. No press from the pad had been tried on a card.
+- On this Mac, with the owner's yes: `com.stablyai.orca` was added to `keystrokeApps` in their
+  `config.json` (the file from before is `config.json.before-orca-typing`). The bridge loaded
+  it at 21:41:31 UTC.
+- In the tools (D-067): `Config.warnings` names a layer's app that the list leaves out, the
+  bridge logs it when the config loads, `micro config check` prints it, the window shows it as
+  the next step with a button that adds the app, and the Orca switch adds Orca to a list that
+  is in use. 4 tests; `scripts/test` passes 347.
+
+Seen with the corrected file at 21:46:37 UTC: the owner pressed ✓ and the log said
+`click:native-chat-appearance/=Allow: pressed "Allow" (153 elements, 29 ms)`. The owner said it
+worked. Not tried since the correction: Decline on a card.
+
 ### Pull request 7 was merged (2026-11-24 16:18 UTC)
 
 The owner pressed Create PR at 14:21 UTC and said to merge at 16:18.
