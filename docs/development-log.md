@@ -862,6 +862,101 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### CI failed on the dim-key branch: the new tests starved a stick test (2026-11-25 04:51 UTC), fixed
+
+`test` failed on b5a92f9, the first push of pull request 10. 355 of 356 tests passed.
+
+- The failure: `aPushEndsWhenTheLayerChanges` (OwnLayerTests.swift:252), `said("the pad changed
+  layer")` was false, after 40 s. That test and the code under it were not changed.
+- The cause: every tick in the test bench asks the made-up pad for its layer, and each request
+  paid the pad's 50 ms pause between requests (`Pad.requestGap`). The 9 new tests ran about
+  146 ticks, 8 s of the main thread. MicroKit's tests went from 16.6 s to 27 s on this Mac and
+  to 40 s on CI. The stick test's push waited so long for its turn that the bridge's own rule
+  ended the scroll: no word from the stick for 20 s. The layer change then had nothing to end.
+- The fix: a pad has its own `gap`, 50 ms as before, and the bench's made-up pad keeps none.
+  The 5 seconds between asks are `OrcaLink.watchEvery`, and the bench asks every 2, so the new
+  tests run 44 ticks.
+- After: MicroKit's 295 tests take 1.5 s on this Mac. `scripts/test` passed 356 three times in
+  a row. The installed bridge is still the build of 547dda4; the bridge itself does the same
+  as before.
+
+### The dim key works on the pad (2026-11-25 04:42 and 04:46 UTC)
+
+The owner said to install. `scripts/install` built 547dda4 and restarted the bridge.
+
+- The bridge started at 04:39:33: 6 Claude sessions kept their keys, and `Orca chats from
+  before the restart: 2 keep their keys, 0 of them closed`. The pad was on layer 2. Key 2 still
+  held the test chat whose tab was closed an hour before.
+- For three minutes the Claude app was in front. The bridge asked Orca nothing and key 2
+  stayed lit: nothing is asked while Orca is behind another app (D-068).
+- 04:42:50, with Orca in front: `chat 564f669d was closed: key 2 keeps it and goes dim`. The
+  owner said the key went dim.
+- 04:46:06: a hold on the dim key, `the key lets its chat go`.
+- 04:46:37: a hold on key 2 took another chat, `key 2 takes chat 6ceec155 (done)`. The owner
+  tapped the key four times (the last line at 04:46:42) and closed the chat's tab. 04:46:46:
+  `chat 6ceec155 was closed: key 2 keeps it and goes dim`, 9 seconds after the take.
+- No line said that Orca could not be asked, and none that its list left a chat out.
+- Not tried: Orca's list leaving out a chat whose tab is open, an Orca that does not answer,
+  and what the asking costs over a day. The first two pass their tests against a stand-in.
+
+### The dim key did not come on: the closed chat had no process the bridge knew (2026-11-25 03:41 UTC), fixed
+
+The owner tried the dim key on the pad, on layer 2, with the build of 123fb4a.
+
+- 03:41:12: a hold on key 2, `key 2 takes chat 564f669d (done)`. The owner then closed that
+  chat's tab in Orca. Key 2 stayed lit, and the log had no line after the take.
+  `micro ctl orca chats` no longer listed the chat; `micro ctl state` still had it open on key 2.
+- The cause: the bridge learns that a chat is closed from the hook's last word or from the end
+  of the chat's process. This chat was taken from Orca's list and had said nothing to this
+  bridge, so the bridge knew no process of it. Nothing ran when its tab closed. The same hole
+  was there for a chat whose process ended while its tab stayed, such as key 1's since
+  22:17:33.
+- Why the socket test of 2026-11-24 passed: it closed a chat that was running. Its process
+  ended, the bridge asked Orca, and the key went dim in about 2 seconds.
+- The fix (D-068): `OrcaKeys.quiet` names the open chats on keys with no known process.
+  `Daemon.watchQuietChats` asks Orca for its list of chats every 5 seconds while Orca is in
+  front and the keyboard or the mouse was touched since the last ask, and once more when Orca
+  leaves the front and still runs. A chat the list leaves out is asked about alone before its
+  key goes dim. An ask that fails changes nothing, and the log says so once.
+- Measured on this Mac, Orca 1.4.271: `orca agent list --json` took 0.17 to 0.20 s, 0.16 s of
+  it processor time. `orca agent show` for the closed chat answered `ok` with no place, in
+  0.37 s. The list's answer has a `truncated` field (false here), and Orca's help says a chat
+  put to sleep in the middle of a turn is not listed. So the list alone does not dim a key.
+- 9 tests in `OrcaTests`; `scripts/test` passes 356. On a scratch copy with the call to
+  `watchQuietChats` taken out, 7 of the 8 tests written by then failed. The eighth says a chat
+  with a known process is not asked about, which holds either way.
+- At that point the installed bridge was still the build of 123fb4a, and the pad was not
+  tried. The entry above has the install and the try.
+
+### Decline pressed Deny from the pad, and a refused hold flashed red (2026-11-25 03:39 UTC)
+
+From the bridge's log, on layer 2, with the build of 123fb4a:
+
+- 03:39:07: `ACT06.press in com.stablyai.orca: click:native-chat-appearance/=Deny`, then
+  `pressed "Deny" (178 elements, 39 ms)`. The owner said Decline works.
+- 03:39:23, 03:39:36, 03:39:41: a hold on key 2 with the chat of key 1 on screen:
+  `key 2 takes no chat: that chat is on key 1 already`. The owner saw key 2 light red each
+  time, which is the refusal's flash. Key 2 held nothing after.
+- 22:17:33 (2026-11-24): `chat 6481741d's process ended, but Orca still has its tab: key 1
+  stays lit`. D-057 on a real chat: the process ended and the key did not go dim.
+
+### Pull request 9 was merged and installed (2026-11-24 21:51 UTC)
+
+The owner said to merge on green and to install. `test` passed in 1m37s on 607cdcc, the pull
+request was merged as 123fb4a, and `scripts/install` built main and restarted the bridge.
+
+- The bridge started at 21:51:25: 6 Claude sessions kept their keys, and `Orca chats from
+  before the restart: 1 keep their keys, 0 of them closed`. This is the first restart with a
+  chat on a key of Orca's layer.
+- With the owner's file the installed `micro config check` prints no warning. With the file
+  from before the correction (`config.json.before-orca-typing`) it prints `warning:
+  layerApps.2: com.stablyai.orca is not in keystrokeApps, so on layer 2 the pad types and
+  clicks nothing in it. Add it to keystrokeApps`.
+- Not tried in the running window: the next step with "Add Orca" and the changed switch. The
+  owner's file is correct now, so the step does not show on this Mac.
+- Seen again: one tap in the log twice within the same second (21:51:28, key 1 on layer 2),
+  and one of the four ✓ presses at 21:35:13. Issue 2, the doubled key press, is still open.
+
 ### Approve did nothing in Orca: Orca was not in `keystrokeApps` (2026-11-24 21:35 UTC), fixed in the file and in the tools
 
 The owner set a test chat to "Ask for approval", got the card "Allow Write?" and pressed the

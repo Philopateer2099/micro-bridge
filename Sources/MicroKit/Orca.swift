@@ -326,4 +326,7 @@ struct OrcaLink {
     /// Seconds between the end of a chat's process and asking Orca whether its tab is closed
     /// too: Orca drops a closed tab a moment after its process.
     var settle: TimeInterval = 0.7
+    /// Seconds between two asks about quiet chats while Orca is in front. One ask starts
+    /// Orca's command line once, about 0.16 s of processor time.
+    var watchEvery = 5
 }

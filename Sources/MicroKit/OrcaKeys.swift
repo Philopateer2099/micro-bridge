@@ -103,6 +103,13 @@ public struct OrcaKeys: Sendable, Equatable {
         chats.values.filter { chat in chat.ended == nil && chat.pid.map { !isAlive($0) } == true }.map(\.id).sorted()
     }
 
+    /// The open chats on keys whose process the bridge does not know: a chat taken from Orca's
+    /// list that has not reported yet, or one whose process ended while its tab stayed. Such a
+    /// chat's tab closes without a word to the bridge, so Orca is asked about it (D-068).
+    public var quiet: [String] {
+        chats.values.filter { $0.slot != nil && $0.ended == nil && $0.pid == nil }.map(\.id).sorted()
+    }
+
     /// The chat's process is gone: it does nothing any more. A chat on no key is forgotten.
     /// True when it is on a key: Orca then says whether its tab is closed too.
     @discardableResult

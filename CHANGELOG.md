@@ -45,8 +45,13 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   and Decline press "Allow" and "Deny" on a chat's permission card. A chat in Orca never takes
   a key on Claude's layer. `micro orca` prints what the bridge sees of Orca. Tried on a real
   Orca through the bridge's socket. On the pad the hold that takes a chat, the tap that
-  shows it, the hold that frees a key and Approve on a permission card were tried; the dim key
-  and Decline were not.
+  shows it, the hold that frees a key, and Approve and Decline on a permission card were tried.
+- **The key of a closed chat goes dim also when the chat had no process the bridge knew:** a
+  chat taken from Orca's list before it said anything, or one whose process ended while its
+  tab stayed. While Orca is in front and you are at the Mac, the bridge asks Orca every 5
+  seconds which chats are open, and once more when Orca leaves the front. Before, such a key
+  stayed lit until it was tapped. Tried on the pad: the key went dim both times a chat's tab
+  was closed, and a hold freed it.
 - **A layer's app and `keystrokeApps`:** the bridge types and clicks only in the apps that
   list names, when it is in use. A config that gives an app a layer and leaves it off the list
   now gets a warning in the log, in `micro config check` and as the window's next step, and

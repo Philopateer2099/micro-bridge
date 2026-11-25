@@ -109,6 +109,9 @@ public final class Pad {
 
     /// Minimum gap between requests; the vendor app waits the same.
     public static let requestGap: TimeInterval = 0.05
+    /// The gap this pad keeps. A made-up pad in a test keeps none, so a test does not hold the
+    /// main thread 50 ms for every request.
+    var gap = Pad.requestGap
 
     // MARK: Finding
 
@@ -197,7 +200,7 @@ public final class Pad {
     @discardableResult
     public func call(_ method: Method, params: JSONValue = .null, timeout: TimeInterval = 10) throws(PadError) -> JSONValue? {
         guard isConnected else { throw .disconnected }
-        let wait = lastSend.addingTimeInterval(Self.requestGap).timeIntervalSinceNow
+        let wait = lastSend.addingTimeInterval(gap).timeIntervalSinceNow
         if wait > 0 { Pad.spin(for: wait) }
 
         nextID = nextID % 998 + 1

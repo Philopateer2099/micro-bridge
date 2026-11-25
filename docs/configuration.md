@@ -235,6 +235,11 @@ Accessibility.
 - **A closed chat** stays on its key, dim. A tap does nothing and a hold frees the key. A chat
   whose process ended while its tab is still open keeps its light: the bridge asks Orca which
   of the two it is.
+- **A chat with no process the bridge knows** (its key took it before it said anything, or its
+  process ended and its tab stayed) is asked about: while Orca is in front and you are at the
+  Mac, the bridge asks Orca every 5 seconds which chats are open, and once more when Orca
+  leaves the front. Its key goes dim within about 5 seconds of its tab closing. Each ask
+  starts Orca's command line once (about 0.16 s of processor time).
 - **Approve and Decline** press "Allow" and "Deny" on the chat's permission card
   (`commands.APPR.orca` and `commands.REJ.orca`). A file that sets `APPR` or `REJ` itself needs
   those `orca` entries too.
@@ -278,8 +283,13 @@ Accessibility.
   sensor moved the pad to layer 2, to layer 3 and back, and the bridge followed each one. A
   hold on an empty key took the chat on screen and the key lit. A tap on a key showed its chat
   from another tab. A hold on a taken key freed it. Approve pressed "Allow" on a chat's
-  permission card (21:46 UTC), once Orca was in `keystrokeApps`. Not tried on the pad yet: the
-  dim key, and Decline on a card.
+  permission card (21:46 UTC), once Orca was in `keystrokeApps`. On 2026-11-25 (03:39 UTC)
+  Decline pressed "Deny" on a card, and a hold on an empty key flashed red while the chat on
+  screen was on another key.
+- The dim key did not come on in that try (03:41 UTC): the closed chat had no process the
+  bridge knew. The bridge asks Orca about such chats since (D-068). Tried on the pad with that
+  build at 04:42 and 04:46 UTC: the key of a closed chat went dim both times, the second time
+  within 9 seconds of the hold that took the chat, and a hold freed the dim key.
 
 ## Checked on the pad (2026-11-11 and 2026-11-12)
 
