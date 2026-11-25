@@ -133,6 +133,12 @@ final class Bench {
         var chats: [OrcaChat] = []
         var tabs: [OrcaTab] = []
         var orcaProblem: String?
+        /// Chats whose tab is open and that Orca's list leaves out all the same.
+        var asleep: [OrcaChat] = []
+        /// How often the bridge asked Orca for its list of chats.
+        var asked = 0
+        /// Seconds since the person last touched the keyboard or the mouse.
+        var idle = 0.0
         /// The chats the bridge brought on screen, by ID, oldest first.
         var shown: [String] = []
     }
@@ -176,11 +182,13 @@ final class Bench {
         world.log = { [scene] in scene.lines.append($0) }
         world.scroll = { [scene] in scene.scrolled += abs($0) }
         // A made-up Orca that answers at once.
+        world.idle = { [scene] in scene.idle }
         world.orca.chats = { [scene] done in
+            scene.asked += 1
             done(scene.orcaProblem.map { .failure(Orca.Problem($0)) } ?? .success(scene.chats))
         }
         world.orca.place = { [scene] id, done in
-            done(scene.orcaProblem.map { .failure(Orca.Problem($0)) } ?? .success(scene.chats.first { $0.id == id }))
+            done(scene.orcaProblem.map { .failure(Orca.Problem($0)) } ?? .success((scene.chats + scene.asleep).first { $0.id == id }))
         }
         world.orca.tabs = { [scene] in scene.tabs }
         world.orca.show = { [scene] chat, done in

@@ -499,6 +499,162 @@ struct OrcaTests {
         #expect(bench.pad.keyBrightness?.first == 1)
     }
 
+    // MARK: Quiet chats (D-068)
+
+    /// A chat taken from Orca's list that has not reported: the bridge knows no process of
+    /// its own, so nothing ends when its tab is closed. Orca is asked which chats are open.
+    @Test func aQuietChatsKeyGoesDimWhenItsTabIsClosed() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.tick()
+        #expect(bench.scene.asked == 1)
+        #expect(bench.pad.keyBrightness?.first == 1)
+
+        bench.scene.chats = []
+        for _ in 0 ..< Daemon.quietInterval - 1 { bench.tick() }
+        #expect(bench.scene.asked == 1)
+        bench.tick()
+        #expect(bench.scene.asked == 2)
+        #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
+        #expect(bench.pad.keyColors == [Self.white, 0, 0, 0, 0, 0])
+        #expect(abs((bench.pad.keyBrightness?.first ?? 0) - OrcaKeys.dimBrightness) < 0.001)
+
+        // A closed chat is asked about no more.
+        for _ in 0 ..< 3 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.scene.asked == 2)
+    }
+
+    /// A chat whose process ended while its tab stayed is quiet too.
+    @Test func aChatLeftWithoutItsProcessIsWatchedAsWell() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        try bench.say(Self.report(Self.one, "done"))
+        try bench.say(#"{"op":"end","session":"\#(Self.one)"}"#)
+        #expect(bench.said("chat 11111111's process ended, but Orca still has its tab: key 1 stays lit"))
+
+        bench.scene.chats = []
+        for _ in 0 ... Daemon.quietInterval { bench.tick() }
+        #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
+    }
+
+    /// A tab is closed by hand, in Orca. With another app in front nothing is asked, but for
+    /// once when Orca leaves the front.
+    @Test func quietChatsAreAskedAboutOnlyWhileOrcaIsInFront() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.tick()
+        #expect(bench.scene.asked == 1)
+
+        bench.scene.front = Bench.claude
+        bench.tick()
+        #expect(bench.scene.asked == 2)
+        bench.scene.chats = []
+        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.scene.asked == 2)
+        #expect(!bench.said("was closed"))
+
+        // Back in Orca, the first second asks.
+        bench.scene.front = Bench.orca
+        bench.tick()
+        #expect(bench.scene.asked == 3)
+        #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
+    }
+
+    /// Close a tab and switch away at once: the ask on leaving Orca sees it.
+    @Test func aTabClosedJustBeforeLeavingOrcaIsSeen() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.tick()
+
+        bench.scene.chats = []
+        bench.scene.front = Bench.claude
+        bench.tick()
+        #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
+    }
+
+    /// Orca quit: it is not in front and not running. Its command line is left alone, and
+    /// the key stays as it is.
+    @Test func anOrcaThatQuitIsNotAsked() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.tick()
+        #expect(bench.scene.asked == 1)
+
+        bench.scene.chats = []
+        bench.scene.running.remove(Bench.orca)
+        bench.scene.front = Bench.claude
+        for _ in 0 ..< 2 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.scene.asked == 1)
+        #expect(bench.pad.keyBrightness?.first == 1)
+    }
+
+    /// Nobody closes a tab while nobody is at the Mac: Orca left in front overnight is not
+    /// asked all night.
+    @Test func nothingIsAskedWhileNobodyTouchesTheMac() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.tick()
+        #expect(bench.scene.asked == 1)
+
+        bench.scene.idle = 600
+        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.scene.asked == 1)
+
+        bench.scene.idle = 1
+        bench.tick()
+        #expect(bench.scene.asked == 2)
+    }
+
+    /// When Orca does not answer, nothing is known: the key stays lit, and the log says so once.
+    @Test func anOrcaThatDoesNotAnswerLeavesAQuietChatsKeyLit() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.tick()
+
+        bench.scene.chats = []
+        bench.scene.orcaProblem = "Orca: it is not running"
+        for _ in 0 ..< 3 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.pad.keyBrightness?.first == 1)
+        #expect(!bench.said("was closed"))
+        #expect(bench.scene.lines.filter { $0.contains("could not ask Orca which chats are open (Orca: it is not running)") }.count == 1)
+
+        bench.scene.orcaProblem = nil
+        for _ in 0 ..< Daemon.quietInterval { bench.tick() }
+        #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
+    }
+
+    /// Orca's list leaves out a chat put to sleep in the middle of a turn. Its tab is open,
+    /// so its key stays lit, and Orca is asked about that chat once.
+    @Test func aChatOrcasListLeavesOutKeepsItsKeyLit() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        bench.scene.asleep = bench.scene.chats
+        bench.scene.chats = []
+        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.pad.keyBrightness?.first == 1)
+        #expect(!bench.said("was closed"))
+        #expect(bench.scene.lines.filter { $0.contains("Orca's list leaves out chat 11111111, but its tab is open: key 1 stays lit") }.count == 1)
+    }
+
+    /// A chat that reports has a process the bridge watches. Orca is not asked about it.
+    @Test func aChatWithAKnownProcessIsNotAskedAbout() throws {
+        let bench = try Self.bench()
+        bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
+        try bench.say(Self.take(0, Self.one))
+        try bench.say(Self.report(Self.one, "working", pid: Int(ProcessInfo.processInfo.processIdentifier)))
+        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        #expect(bench.scene.asked == 0)
+        #expect(bench.pad.keyBrightness?.first == 1)
+    }
+
     /// D-044: when the window does not single out one chat, the key says no and the log why.
     @Test func aHoldThatCannotTellWhichChatFlashesTheKey() async throws {
         let bench = try Self.bench()

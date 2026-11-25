@@ -23,6 +23,10 @@ struct DaemonWorld {
     var scroll: (@MainActor (Double) -> Void)?
     /// How the bridge asks Orca about its chats, and shows one.
     var orca = OrcaLink()
+    /// Seconds since the person last touched the keyboard, the mouse or the trackpad.
+    var idle: @MainActor () -> TimeInterval = {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+    }
 
     var socket: String { directory + "/daemon.sock" }
     var config: String { directory + "/config.json" }
@@ -41,6 +45,16 @@ public final class Daemon {
     private(set) var orca = OrcaKeys()
     /// Said once: a chat in Orca reported while no layer is Orca's.
     private var saidNoOrcaLayer = false
+    /// Orca was the app in front at the last tick.
+    private var orcaInFront = false
+    /// The tick at which Orca was last asked which chats are open, and whether its answer is
+    /// still to come.
+    private var quietAsked: Int?
+    private var askingOrca = false
+    /// Chats Orca's list leaves out while their tab is open, so they are asked about once.
+    private var unlisted: Set<String> = []
+    /// The last problem with asking Orca about quiet chats, so the log says it once.
+    private var quietProblem: String?
     private var config = Config.builtIn
     private var configStamp: Date?
     private var configRead = false
@@ -350,7 +364,9 @@ public final class Daemon {
         ticks += 1
         loadConfig()
         // In case a notice of the app in front went missing.
-        frontChanged(world.frontApp())
+        let front = world.frontApp()
+        frontChanged(front)
+        watchQuietChats(front: front)
         // Every few seconds, forget sessions whose agent process has exited.
         if ticks % 5 == 0 {
             if state.prune(isAlive: ProcessTree.isAlive) { lightsChanged() }
@@ -1217,6 +1233,70 @@ public final class Daemon {
         } else {
             ask()
         }
+    }
+
+    /// Seconds between two asks about quiet chats while Orca is in front. One ask starts
+    /// Orca's command line once, about 0.16 s of processor time.
+    static let quietInterval = 5
+
+    /// A quiet chat (`OrcaKeys.quiet`) says nothing when its tab is closed, and no process of
+    /// its own ends. A tab is closed by hand, in Orca. So while Orca is in front and the
+    /// person is at the Mac, Orca is asked every few seconds which chats are open, and once
+    /// more when it leaves the front (D-068).
+    private func watchQuietChats(front: String?) {
+        let inFront = front == Orca.bundleID
+        let left = orcaInFront && !inFront
+        orcaInFront = inFront
+        let ids = orca.quiet
+        guard orcaLayer != nil, !askingOrca, !ids.isEmpty else { return }
+        // Nothing was closed by hand if no key or mouse was touched since the last ask. Two
+        // seconds more, for a tab closed while that ask was on its way.
+        let due = quietAsked.map { ticks - $0 }.map { $0 >= Self.quietInterval && world.idle() < Double($0) + 2 } ?? true
+        // An Orca that has quit is not asked: its command line must not be what starts it.
+        guard inFront ? due : left && world.runningApps().contains(Orca.bundleID) else { return }
+        quietAsked = ticks
+        askingOrca = true
+        world.orca.chats { [weak self] result in
+            guard let self else { return }
+            self.askingOrca = false
+            switch result {
+            case let .success(open):
+                self.quietProblem = nil
+                let listed = Set(open.map(\.id))
+                let missing = ids.filter { !listed.contains($0) }
+                self.unlisted.formIntersection(missing)
+                for id in missing where !self.unlisted.contains(id) { self.askWhetherClosed(id) }
+            case let .failure(problem):
+                self.quietTrouble(problem)
+            }
+        }
+    }
+
+    /// Orca's list has no such chat. The list leaves out a chat put to sleep in the middle of
+    /// a turn, and it can be cut short, so Orca is asked about this one chat before its key
+    /// goes dim, as for a chat whose process ended.
+    private func askWhetherClosed(_ id: String) {
+        world.orca.place(id) { [weak self] result in
+            guard let self, let chat = self.orca.chats[id], let slot = chat.slot, chat.ended == nil, chat.pid == nil else { return }
+            switch result {
+            case .success(nil):
+                if self.orca.end(id) { self.lightsChanged() }
+                self.saveOrcaKeys()
+                self.flush()
+            case .success(.some):
+                self.unlisted.insert(id)
+                self.log("Orca's list leaves out chat \(Self.short(id)), but its tab is open: key \(slot + 1) stays lit")
+            case let .failure(problem):
+                self.quietTrouble(problem)
+            }
+        }
+    }
+
+    /// Orca did not answer. Nothing is known then, so the keys stay as they are.
+    private func quietTrouble(_ problem: Orca.Problem) {
+        guard quietProblem != problem.text else { return }
+        quietProblem = problem.text
+        log("could not ask Orca which chats are open (\(problem.text)): the keys stay as they are. Said once")
     }
 
     /// Orca's open Claude chats, as the answer to `orca.chats`, for the window and the panel
