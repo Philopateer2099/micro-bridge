@@ -50,7 +50,8 @@ Built from 2026-11-10 to 2026-11-22 against a real Codex Micro on firmware v0.6.
   chat taken from Orca's list before it said anything, or one whose process ended while its
   tab stayed. While Orca is in front and you are at the Mac, the bridge asks Orca every 5
   seconds which chats are open, and once more when Orca leaves the front. Before, such a key
-  stayed lit until it was tapped. Not tried on the pad since the change.
+  stayed lit until it was tapped. Tried on the pad: the key went dim both times a chat's tab
+  was closed, and a hold freed it.
 - **A layer's app and `keystrokeApps`:** the bridge types and clicks only in the apps that
   list names, when it is in use. A config that gives an app a layer and leaves it off the list
   now gets a warning in the log, in `micro config check` and as the window's next step, and

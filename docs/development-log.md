@@ -862,7 +862,26 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
-### The dim key did not come on: the closed chat had no process the bridge knew (2026-11-25 03:41 UTC), fixed in the code, not installed yet
+### The dim key works on the pad (2026-11-25 04:42 and 04:46 UTC)
+
+The owner said to install. `scripts/install` built 547dda4 and restarted the bridge.
+
+- The bridge started at 04:39:33: 6 Claude sessions kept their keys, and `Orca chats from
+  before the restart: 2 keep their keys, 0 of them closed`. The pad was on layer 2. Key 2 still
+  held the test chat whose tab was closed an hour before.
+- For three minutes the Claude app was in front. The bridge asked Orca nothing and key 2
+  stayed lit: nothing is asked while Orca is behind another app (D-068).
+- 04:42:50, with Orca in front: `chat 564f669d was closed: key 2 keeps it and goes dim`. The
+  owner said the key went dim.
+- 04:46:06: a hold on the dim key, `the key lets its chat go`.
+- 04:46:37: a hold on key 2 took another chat, `key 2 takes chat 6ceec155 (done)`. The owner
+  tapped the key four times (the last line at 04:46:42) and closed the chat's tab. 04:46:46:
+  `chat 6ceec155 was closed: key 2 keeps it and goes dim`, 9 seconds after the take.
+- No line said that Orca could not be asked, and none that its list left a chat out.
+- Not tried: Orca's list leaving out a chat whose tab is open, an Orca that does not answer,
+  and what the asking costs over a day. The first two pass their tests against a stand-in.
+
+### The dim key did not come on: the closed chat had no process the bridge knew (2026-11-25 03:41 UTC), fixed
 
 The owner tried the dim key on the pad, on layer 2, with the build of 123fb4a.
 
@@ -888,9 +907,8 @@ The owner tried the dim key on the pad, on layer 2, with the build of 123fb4a.
 - 9 tests in `OrcaTests`; `scripts/test` passes 356. On a scratch copy with the call to
   `watchQuietChats` taken out, 7 of the 8 tests written by then failed. The eighth says a chat
   with a known process is not asked about, which holds either way.
-- Not done: the installed bridge is still the build of 123fb4a, and the pad was not tried. Key
-  2 still holds the closed test chat, so after an install it should go dim by itself in the
-  first second Orca is in front.
+- At that point the installed bridge was still the build of 123fb4a, and the pad was not
+  tried. The entry above has the install and the try.
 
 ### Decline pressed Deny from the pad, and a refused hold flashed red (2026-11-25 03:39 UTC)
 

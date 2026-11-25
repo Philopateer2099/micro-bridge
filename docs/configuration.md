@@ -287,7 +287,9 @@ Accessibility.
   Decline pressed "Deny" on a card, and a hold on an empty key flashed red while the chat on
   screen was on another key.
 - The dim key did not come on in that try (03:41 UTC): the closed chat had no process the
-  bridge knew. The bridge asks Orca about such chats since (D-068). Not tried on the pad since.
+  bridge knew. The bridge asks Orca about such chats since (D-068). Tried on the pad with that
+  build at 04:42 and 04:46 UTC: the key of a closed chat went dim both times, the second time
+  within 9 seconds of the hold that took the chat, and a hold freed the dim key.
 
 ## Checked on the pad (2026-11-11 and 2026-11-12)
 

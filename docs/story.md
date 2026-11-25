@@ -263,3 +263,15 @@ Turned down: letting an app with a layer be typed in without being on the list. 
 Cost: two settings still have to agree. Now the tools keep them in step. The window's Orca switch adds Orca to the list. The bridge's log and the config check warn when a layer's app is missing from it. The window shows that as the next step, with a button that adds the app.
 
 Five minutes later I pressed ✓ again and the card was allowed. Still open: Decline on a card, and the dim key.
+
+## 19. The key that stayed lit
+
+Decisions: D-068
+
+I tried the dim key on the pad. I put a test chat on key 2 and closed its tab in Orca. The key stayed lit.
+
+The bridge had two ways to learn that a chat was gone: the chat's last word, and the end of its process. This chat gave neither. It was idle when the key took it, so the bridge knew no process of it. Only Orca knew the tab was closed.
+
+Turning point: the bridge has to ask Orca. Each ask starts Orca's command line, so asking all day was out. A tab is closed by hand, in Orca. So the bridge asks only then: while Orca is in front and I am at the Mac, every 5 seconds, and once more when I switch away. Orca's list can leave a chat out while its tab is open, so before a key goes dim the bridge asks about that one chat too.
+
+Cost: about 3% of one processor core while I work in Orca with such a chat on a key. A tab closed from outside while Orca is behind another app shows only when Orca is in front again. On the pad it worked: key 2 went dim both times I closed a chat, and a hold freed it.
