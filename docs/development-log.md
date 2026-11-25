@@ -862,6 +862,24 @@ button for the start (D-025).
 - 12 new tests (212: 169 for the bridge, 43 for the window), and the shell test they replace
   is gone.
 
+### CI failed on the dim-key branch: the new tests starved a stick test (2026-11-25 04:51 UTC), fixed
+
+`test` failed on b5a92f9, the first push of pull request 10. 355 of 356 tests passed.
+
+- The failure: `aPushEndsWhenTheLayerChanges` (OwnLayerTests.swift:252), `said("the pad changed
+  layer")` was false, after 40 s. That test and the code under it were not changed.
+- The cause: every tick in the test bench asks the made-up pad for its layer, and each request
+  paid the pad's 50 ms pause between requests (`Pad.requestGap`). The 9 new tests ran about
+  146 ticks, 8 s of the main thread. MicroKit's tests went from 16.6 s to 27 s on this Mac and
+  to 40 s on CI. The stick test's push waited so long for its turn that the bridge's own rule
+  ended the scroll: no word from the stick for 20 s. The layer change then had nothing to end.
+- The fix: a pad has its own `gap`, 50 ms as before, and the bench's made-up pad keeps none.
+  The 5 seconds between asks are `OrcaLink.watchEvery`, and the bench asks every 2, so the new
+  tests run 44 ticks.
+- After: MicroKit's 295 tests take 1.5 s on this Mac. `scripts/test` passed 356 three times in
+  a row. The installed bridge is still the build of 547dda4; the bridge itself does the same
+  as before.
+
 ### The dim key works on the pad (2026-11-25 04:42 and 04:46 UTC)
 
 The owner said to install. `scripts/install` built 547dda4 and restarted the bridge.

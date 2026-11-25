@@ -512,7 +512,7 @@ struct OrcaTests {
         #expect(bench.pad.keyBrightness?.first == 1)
 
         bench.scene.chats = []
-        for _ in 0 ..< Daemon.quietInterval - 1 { bench.tick() }
+        for _ in 0 ..< Bench.watchEvery - 1 { bench.tick() }
         #expect(bench.scene.asked == 1)
         bench.tick()
         #expect(bench.scene.asked == 2)
@@ -521,7 +521,7 @@ struct OrcaTests {
         #expect(abs((bench.pad.keyBrightness?.first ?? 0) - OrcaKeys.dimBrightness) < 0.001)
 
         // A closed chat is asked about no more.
-        for _ in 0 ..< 3 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ... Bench.watchEvery { bench.tick() }
         #expect(bench.scene.asked == 2)
     }
 
@@ -535,7 +535,7 @@ struct OrcaTests {
         #expect(bench.said("chat 11111111's process ended, but Orca still has its tab: key 1 stays lit"))
 
         bench.scene.chats = []
-        for _ in 0 ... Daemon.quietInterval { bench.tick() }
+        bench.tick()
         #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
     }
 
@@ -552,7 +552,7 @@ struct OrcaTests {
         bench.tick()
         #expect(bench.scene.asked == 2)
         bench.scene.chats = []
-        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ..< 2 * Bench.watchEvery { bench.tick() }
         #expect(bench.scene.asked == 2)
         #expect(!bench.said("was closed"))
 
@@ -588,7 +588,7 @@ struct OrcaTests {
         bench.scene.chats = []
         bench.scene.running.remove(Bench.orca)
         bench.scene.front = Bench.claude
-        for _ in 0 ..< 2 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ... Bench.watchEvery { bench.tick() }
         #expect(bench.scene.asked == 1)
         #expect(bench.pad.keyBrightness?.first == 1)
     }
@@ -603,7 +603,7 @@ struct OrcaTests {
         #expect(bench.scene.asked == 1)
 
         bench.scene.idle = 600
-        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ..< 2 * Bench.watchEvery { bench.tick() }
         #expect(bench.scene.asked == 1)
 
         bench.scene.idle = 1
@@ -620,13 +620,14 @@ struct OrcaTests {
 
         bench.scene.chats = []
         bench.scene.orcaProblem = "Orca: it is not running"
-        for _ in 0 ..< 3 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ..< 2 * Bench.watchEvery { bench.tick() }
+        #expect(bench.scene.asked == 3)
         #expect(bench.pad.keyBrightness?.first == 1)
         #expect(!bench.said("was closed"))
         #expect(bench.scene.lines.filter { $0.contains("could not ask Orca which chats are open (Orca: it is not running)") }.count == 1)
 
         bench.scene.orcaProblem = nil
-        for _ in 0 ..< Daemon.quietInterval { bench.tick() }
+        for _ in 0 ..< Bench.watchEvery { bench.tick() }
         #expect(bench.said("chat 11111111 was closed: key 1 keeps it and goes dim"))
     }
 
@@ -638,7 +639,8 @@ struct OrcaTests {
         try bench.say(Self.take(0, Self.one))
         bench.scene.asleep = bench.scene.chats
         bench.scene.chats = []
-        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ... 2 * Bench.watchEvery { bench.tick() }
+        #expect(bench.scene.asked == 3)
         #expect(bench.pad.keyBrightness?.first == 1)
         #expect(!bench.said("was closed"))
         #expect(bench.scene.lines.filter { $0.contains("Orca's list leaves out chat 11111111, but its tab is open: key 1 stays lit") }.count == 1)
@@ -650,7 +652,7 @@ struct OrcaTests {
         bench.scene.chats = [Self.chat(Self.one, "Fix the build")]
         try bench.say(Self.take(0, Self.one))
         try bench.say(Self.report(Self.one, "working", pid: Int(ProcessInfo.processInfo.processIdentifier)))
-        for _ in 0 ..< 4 * Daemon.quietInterval { bench.tick() }
+        for _ in 0 ... Bench.watchEvery { bench.tick() }
         #expect(bench.scene.asked == 0)
         #expect(bench.pad.keyBrightness?.first == 1)
     }

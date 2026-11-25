@@ -1235,14 +1235,10 @@ public final class Daemon {
         }
     }
 
-    /// Seconds between two asks about quiet chats while Orca is in front. One ask starts
-    /// Orca's command line once, about 0.16 s of processor time.
-    static let quietInterval = 5
-
     /// A quiet chat (`OrcaKeys.quiet`) says nothing when its tab is closed, and no process of
     /// its own ends. A tab is closed by hand, in Orca. So while Orca is in front and the
-    /// person is at the Mac, Orca is asked every few seconds which chats are open, and once
-    /// more when it leaves the front (D-068).
+    /// person is at the Mac, Orca is asked every few seconds (`OrcaLink.watchEvery`) which
+    /// chats are open, and once more when it leaves the front (D-068).
     private func watchQuietChats(front: String?) {
         let inFront = front == Orca.bundleID
         let left = orcaInFront && !inFront
@@ -1251,7 +1247,7 @@ public final class Daemon {
         guard orcaLayer != nil, !askingOrca, !ids.isEmpty else { return }
         // Nothing was closed by hand if no key or mouse was touched since the last ask. Two
         // seconds more, for a tab closed while that ask was on its way.
-        let due = quietAsked.map { ticks - $0 }.map { $0 >= Self.quietInterval && world.idle() < Double($0) + 2 } ?? true
+        let due = quietAsked.map { ticks - $0 }.map { $0 >= world.orca.watchEvery && world.idle() < Double($0) + 2 } ?? true
         // An Orca that has quit is not asked: its command line must not be what starts it.
         guard inFront ? due : left && world.runningApps().contains(Orca.bundleID) else { return }
         quietAsked = ticks

@@ -116,6 +116,9 @@ final class FakePad: PadLink {
 final class Bench {
     static let chatGPT = PadSharing.chatGPT
     static let claude = "com.anthropic.claudefordesktop"
+    /// Seconds between two asks about quiet chats here. Short: a tick costs the pad's 50 ms
+    /// between requests, and a test that ticks long holds up the tests that wait on timers.
+    static let watchEvery = 2
     static let orca = "com.stablyai.orca"
     static let safari = "com.apple.Safari"
 
@@ -172,7 +175,11 @@ final class Bench {
                            usagePairs: [], maxInputReport: 64, maxOutputReport: 64)
         var world = DaemonWorld()
         world.directory = directory
-        world.openPad = { () throws(PadError) -> Pad in Pad(link: pad, info: info, note: nil) }
+        world.openPad = { () throws(PadError) -> Pad in
+            let made = Pad(link: pad, info: info, note: nil)
+            made.gap = 0
+            return made
+        }
         world.findHelper = { .absent }
         world.frontApp = { [scene] in scene.front }
         world.runningApps = { [scene] in scene.running }
@@ -196,6 +203,7 @@ final class Bench {
             done("its tab is on screen now")
         }
         world.orca.settle = 0
+        world.orca.watchEvery = Self.watchEvery
         self.directory = directory
         daemon = try Daemon(world: world)
     }
